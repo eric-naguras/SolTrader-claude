@@ -1,9 +1,8 @@
 import dotenv from 'dotenv';
 import winston from 'winston';
 import TelegramBot from 'node-telegram-bot-api';
-import { Client, GatewayIntentBits, WebhookClient } from 'discord.js';
+import { WebhookClient } from 'discord.js';
 import { getSupabaseClient } from '@sonar/database';
-import type { TradeSignal } from '@sonar/types';
 
 dotenv.config();
 
@@ -29,7 +28,6 @@ interface NotificationChannels {
 class NotifierService {
   private channels: NotificationChannels = {};
   private supabase = getSupabaseClient();
-  private isRunning = false;
 
   constructor() {
     this.initializeChannels();
@@ -60,11 +58,10 @@ class NotifierService {
 
   async start() {
     try {
-      this.isRunning = true;
       logger.info('Starting Notifier service...');
 
       // Subscribe to new trade signals
-      const subscription = this.supabase
+      this.supabase
         .channel('trade_signals_changes')
         .on(
           'postgres_changes',
@@ -88,7 +85,6 @@ class NotifierService {
   }
 
   async stop() {
-    this.isRunning = false;
     await this.supabase.removeAllChannels();
     logger.info('Notifier service stopped');
   }

@@ -1,6 +1,5 @@
 import dotenv from 'dotenv';
 import { Helius } from 'helius-sdk';
-import { Connection, PublicKey } from '@solana/web3.js';
 import winston from 'winston';
 import { getActiveWallets, insertWhaleTrade, upsertToken } from '@sonar/database';
 import type { TrackedWallet } from '@sonar/types';
@@ -22,9 +21,7 @@ const logger = winston.createLogger({
 
 class WhaleWatcher {
   private helius: Helius;
-  private connection: Connection;
   private trackedWallets: Map<string, TrackedWallet> = new Map();
-  private isRunning = false;
 
   constructor() {
     const heliusApiKey = process.env.HELIUS_API_KEY;
@@ -33,17 +30,13 @@ class WhaleWatcher {
     }
 
     this.helius = new Helius(heliusApiKey);
-    this.connection = new Connection(
-      `https://mainnet.helius-rpc.com/?api-key=${heliusApiKey}`
-    );
 
     logger.info('WhaleWatcher initialized');
   }
 
   async start() {
     try {
-      this.isRunning = true;
-      logger.info('Starting WhaleWatcher service...');
+        logger.info('Starting WhaleWatcher service...');
 
       // Load tracked wallets
       await this.loadTrackedWallets();
@@ -62,7 +55,6 @@ class WhaleWatcher {
   }
 
   async stop() {
-    this.isRunning = false;
     logger.info('WhaleWatcher service stopped');
   }
 
@@ -91,8 +83,8 @@ class WhaleWatcher {
 
     // Subscribe to parsed transactions for all tracked wallets
     this.helius.connection.onLogs(
-      addresses.map(addr => new PublicKey(addr)),
-      async (logs, context) => {
+      'all',
+      async (logs) => {
         try {
           await this.processTransaction(logs.signature);
         } catch (error) {
@@ -107,18 +99,18 @@ class WhaleWatcher {
   private async processTransaction(signature: string) {
     try {
       // Use Helius parsed transaction API
-      const parsedTransaction = await this.helius.getEnhancedTransaction({
-        signature
-      });
+      const parsedTransactions = await this.helius.parseTransactions({ transactions: [signature] });
 
-      if (!parsedTransaction) {
+      if (!parsedTransactions || parsedTransactions.length === 0) {
         return;
       }
 
+      const parsedTransaction = parsedTransactions[0];
+
       // Look for token swap events
-      const swapEvents = parsedTransaction.events?.filter(
-        event => event.type === 'SWAP'
-      ) || [];
+      const swapEvents = Array.isArray(parsedTransaction.events) 
+        ? parsedTransaction.events.filter((event: any) => event.type === 'SWAP')
+        : [];
 
       for (const swap of swapEvents) {
         await this.processSwapEvent(swap, parsedTransaction);
