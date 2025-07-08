@@ -1,0 +1,20 @@
+{
+  "name": "@sonar/paper-trader",
+  "version": "1.0.0",
+  "description": "Paper trading service for tracking signal performance",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@sonar/shared": "workspace:*",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.6.2"
+  }
+}

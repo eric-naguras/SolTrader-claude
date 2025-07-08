@@ -1,0 +1,22 @@
+{
+  "name": "@sonar/notifier",
+  "version": "1.0.0",
+  "description": "Multi-channel notification service for trade signals",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@sonar/shared": "workspace:*",
+    "node-telegram-bot-api": "^0.64.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node-telegram-bot-api": "^0.64.2",
+    "tsx": "^4.6.2"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@sonar/database",
+  "version": "1.0.0",
+  "description": "Database migrations and utilities for Project Sonar",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "migrate": "tsx src/migrate.ts",
+    "seed": "tsx src/seed.ts",
+    "reset": "tsx src/reset.ts"
+  },
+  "dependencies": {
+    "@sonar/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.10.9",
+    "tsx": "^4.6.2"
+  }
+}
