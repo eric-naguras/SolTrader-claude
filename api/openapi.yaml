@@ -1,0 +1,1357 @@
+openapi: 3.0.3
+info:
+  title: Project Sonar API
+  description: |
+    REST API for Project Sonar - Solana Whale Wallet Intelligence Platform.
+    
+    This API provides endpoints for managing tracked wallets, viewing trade signals,
+    monitoring portfolio performance, and configuring the system.
+  version: 1.0.0
+  contact:
+    name: Sonar Development Team
+    email: dev@projectsonar.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+  - url: https://api.projectsonar.io/v1
+    description: Production server
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Wallets
+    description: Manage tracked whale wallets
+  - name: Signals
+    description: Trade signal management and history
+  - name: Portfolio
+    description: Paper trading portfolio management
+  - name: Config
+    description: System configuration and rules
+  - name: Health
+    description: Service health and monitoring
+
+paths:
+  /wallets:
+    get:
+      tags:
+        - Wallets
+      summary: List tracked wallets
+      description: Retrieve a list of all tracked whale wallets with optional filtering
+      operationId: listWallets
+      parameters:
+        - name: active
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+        - name: tags
+          in: query
+          description: Filter by tags (comma-separated)
+          schema:
+            type: string
+            example: "whale,degen"
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: Offset for pagination
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TrackedWallet'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      tags:
+        - Wallets
+      summary: Add new tracked wallet
+      description: Add a new whale wallet to the tracking list
+      operationId: createWallet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletCreateRequest'
+      responses:
+        '201':
+          description: Wallet created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TrackedWallet'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /wallets/{address}:
+    get:
+      tags:
+        - Wallets
+      summary: Get wallet details
+      description: Retrieve detailed information about a specific tracked wallet
+      operationId: getWallet
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Solana wallet address
+          schema:
+            type: string
+            pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TrackedWallet'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    patch:
+      tags:
+        - Wallets
+      summary: Update wallet
+      description: Update properties of a tracked wallet
+      operationId: updateWallet
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Solana wallet address
+          schema:
+            type: string
+            pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletUpdateRequest'
+      responses:
+        '200':
+          description: Wallet updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TrackedWallet'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    delete:
+      tags:
+        - Wallets
+      summary: Remove tracked wallet
+      description: Remove a wallet from the tracking list
+      operationId: deleteWallet
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Solana wallet address
+          schema:
+            type: string
+            pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
+      responses:
+        '204':
+          description: Wallet removed successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /wallets/{address}/trades:
+    get:
+      tags:
+        - Wallets
+      summary: Get wallet trades
+      description: Retrieve trade history for a specific wallet
+      operationId: getWalletTrades
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: Solana wallet address
+          schema:
+            type: string
+            pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
+        - name: trade_type
+          in: query
+          description: Filter by trade type
+          schema:
+            type: string
+            enum: [BUY, SELL]
+        - name: start_date
+          in: query
+          description: Start date for trade history
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: End date for trade history
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/WhaleTrade'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /signals:
+    get:
+      tags:
+        - Signals
+      summary: List trade signals
+      description: Retrieve a list of generated trade signals
+      operationId: listSignals
+      parameters:
+        - name: status
+          in: query
+          description: Filter by signal status
+          schema:
+            type: string
+            enum: [OPEN, EXECUTED, EXPIRED, CANCELLED]
+        - name: token_address
+          in: query
+          description: Filter by token address
+          schema:
+            type: string
+        - name: created_after
+          in: query
+          description: Filter signals created after this date
+          schema:
+            type: string
+            format: date-time
+        - name: created_before
+          in: query
+          description: Filter signals created before this date
+          schema:
+            type: string
+            format: date-time
+        - name: min_whale_count
+          in: query
+          description: Minimum number of whales
+          schema:
+            type: integer
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TradeSignal'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /signals/{id}:
+    get:
+      tags:
+        - Signals
+      summary: Get signal details
+      description: Retrieve detailed information about a specific trade signal
+      operationId: getSignal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Signal ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TradeSignalDetail'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /portfolio/trades:
+    get:
+      tags:
+        - Portfolio
+      summary: List portfolio trades
+      description: Retrieve a list of paper trading positions
+      operationId: listPortfolioTrades
+      parameters:
+        - name: status
+          in: query
+          description: Filter by trade status
+          schema:
+            type: string
+            enum: [OPEN, CLOSED]
+        - name: trade_mode
+          in: query
+          description: Filter by trade mode
+          schema:
+            type: string
+            enum: [PAPER, LIVE]
+        - name: signal_id
+          in: query
+          description: Filter by signal ID
+          schema:
+            type: string
+            format: uuid
+        - name: token_address
+          in: query
+          description: Filter by token address
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PortfolioTrade'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /portfolio/summary:
+    get:
+      tags:
+        - Portfolio
+      summary: Get portfolio summary
+      description: Retrieve current portfolio performance summary
+      operationId: getPortfolioSummary
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PortfolioSummary'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /portfolio/performance:
+    get:
+      tags:
+        - Portfolio
+      summary: Get performance metrics
+      description: Retrieve detailed portfolio performance metrics
+      operationId: getPortfolioPerformance
+      parameters:
+        - name: start_date
+          in: query
+          description: Start date for metrics
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: End date for metrics
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PerformanceMetrics'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /config/rules:
+    get:
+      tags:
+        - Config
+      summary: List signal rules
+      description: Retrieve all configured signal generation rules
+      operationId: listSignalRules
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SignalRule'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      tags:
+        - Config
+      summary: Create signal rule
+      description: Create a new signal generation rule
+      operationId: createSignalRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalRuleCreateRequest'
+      responses:
+        '201':
+          description: Rule created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SignalRule'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /config/rules/{id}:
+    patch:
+      tags:
+        - Config
+      summary: Update signal rule
+      description: Update an existing signal generation rule
+      operationId: updateSignalRule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Rule ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalRuleUpdateRequest'
+      responses:
+        '200':
+          description: Rule updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SignalRule'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check overall system health
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: System is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /health/services:
+    get:
+      tags:
+        - Health
+      summary: Service status
+      description: Get detailed status of all services
+      operationId: serviceStatus
+      responses:
+        '200':
+          description: Service status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceStatus'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+  schemas:
+    ApiResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Whether the request was successful
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code
+            message:
+              type: string
+              description: Human-readable error message
+            details:
+              type: object
+              description: Additional error details
+        metadata:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+              description: Response timestamp
+            request_id:
+              type: string
+              description: Unique request identifier
+            version:
+              type: string
+              description: API version
+
+    PaginatedResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            pagination:
+              type: object
+              required:
+                - page
+                - limit
+                - total
+                - has_more
+              properties:
+                page:
+                  type: integer
+                  description: Current page number
+                limit:
+                  type: integer
+                  description: Items per page
+                total:
+                  type: integer
+                  description: Total number of items
+                has_more:
+                  type: boolean
+                  description: Whether more pages exist
+
+    TrackedWallet:
+      type: object
+      required:
+        - id
+        - address
+        - is_active
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique wallet identifier
+        address:
+          type: string
+          description: Solana wallet address
+          example: "5xoBq7f3bLZzC1SUAo9GiTBJyDoku8C5WvFWJRgKTYCr"
+        alias:
+          type: string
+          description: Human-readable wallet name
+          example: "Famous Whale #1"
+        is_active:
+          type: boolean
+          description: Whether the wallet is actively monitored
+        tags:
+          type: array
+          items:
+            type: string
+          description: Wallet categorization tags
+          example: ["whale", "degen", "early_buyer"]
+        metadata:
+          type: object
+          description: Additional wallet metadata
+        created_at:
+          type: string
+          format: date-time
+          description: Wallet creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    WhaleTrade:
+      type: object
+      required:
+        - id
+        - wallet_address
+        - token_address
+        - trade_type
+        - transaction_hash
+        - trade_timestamp
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique trade identifier
+        wallet_id:
+          type: string
+          format: uuid
+          description: Reference to tracked wallet
+        wallet_address:
+          type: string
+          description: Wallet address
+        token_id:
+          type: string
+          format: uuid
+          description: Reference to token
+        token_address:
+          type: string
+          description: Token address
+        trade_type:
+          type: string
+          enum: [BUY, SELL]
+          description: Type of trade
+        sol_amount:
+          type: number
+          format: double
+          description: Amount in SOL
+        token_amount:
+          type: number
+          format: double
+          description: Amount in tokens
+        usd_value:
+          type: number
+          format: double
+          description: USD value at time of trade
+        price_per_token:
+          type: number
+          format: double
+          description: Price per token in SOL
+        transaction_hash:
+          type: string
+          description: Solana transaction hash
+        block_slot:
+          type: integer
+          format: int64
+          description: Block slot number
+        trade_timestamp:
+          type: string
+          format: date-time
+          description: Trade execution timestamp
+
+    TradeSignal:
+      type: object
+      required:
+        - id
+        - token_address
+        - status
+        - trigger_reason
+        - whale_count
+        - total_sol_amount
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique signal identifier
+        token_address:
+          type: string
+          description: Token address
+        status:
+          type: string
+          enum: [OPEN, EXECUTED, EXPIRED, CANCELLED]
+          description: Signal status
+        trigger_reason:
+          type: string
+          description: Reason for signal generation
+          example: "3 whales bought 25.5 SOL worth in 1 hours"
+        whale_count:
+          type: integer
+          description: Number of whales involved
+        total_sol_amount:
+          type: number
+          format: double
+          description: Total SOL invested by whales
+        metadata:
+          type: object
+          properties:
+            token_symbol:
+              type: string
+            token_name:
+              type: string
+            confidence:
+              type: number
+              format: double
+        created_at:
+          type: string
+          format: date-time
+          description: Signal creation timestamp
+        closed_at:
+          type: string
+          format: date-time
+          description: Signal closure timestamp
+
+    TradeSignalDetail:
+      allOf:
+        - $ref: '#/components/schemas/TradeSignal'
+        - type: object
+          properties:
+            whale_trades:
+              type: array
+              items:
+                $ref: '#/components/schemas/WhaleTrade'
+              description: Trades that triggered this signal
+            matched_rule:
+              $ref: '#/components/schemas/SignalRule'
+              description: Rule that generated this signal
+
+    PortfolioTrade:
+      type: object
+      required:
+        - id
+        - token_address
+        - trade_mode
+        - status
+        - entry_price
+        - entry_sol_amount
+        - entry_timestamp
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique trade identifier
+        signal_id:
+          type: string
+          format: uuid
+          description: Reference to signal
+        token_address:
+          type: string
+          description: Token address
+        trade_mode:
+          type: string
+          enum: [PAPER, LIVE]
+          description: Trade mode
+        status:
+          type: string
+          enum: [OPEN, CLOSED]
+          description: Trade status
+        entry_price:
+          type: number
+          format: double
+          description: Entry price in SOL
+        entry_sol_amount:
+          type: number
+          format: double
+          description: Position size in SOL
+        entry_token_amount:
+          type: number
+          format: double
+          description: Tokens received
+        entry_timestamp:
+          type: string
+          format: date-time
+          description: Trade entry time
+        current_price:
+          type: number
+          format: double
+          description: Current token price
+        high_water_mark:
+          type: number
+          format: double
+          description: Highest price since entry
+        exit_price:
+          type: number
+          format: double
+          description: Exit price in SOL
+        exit_timestamp:
+          type: string
+          format: date-time
+          description: Trade exit time
+        pnl_sol:
+          type: number
+          format: double
+          description: Profit/loss in SOL
+        pnl_percentage:
+          type: number
+          format: double
+          description: Profit/loss percentage
+        exit_reason:
+          type: string
+          description: Reason for closing trade
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SignalRule:
+      type: object
+      required:
+        - id
+        - name
+        - min_whales
+        - time_window_hours
+        - min_total_sol
+        - is_active
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique rule identifier
+        name:
+          type: string
+          description: Rule name
+          example: "Conservative Signal"
+        min_whales:
+          type: integer
+          description: Minimum number of whales
+          minimum: 1
+          example: 3
+        time_window_hours:
+          type: integer
+          description: Time window in hours
+          minimum: 1
+          example: 1
+        min_total_sol:
+          type: number
+          format: double
+          description: Minimum total SOL
+          minimum: 0
+          example: 10.0
+        is_active:
+          type: boolean
+          description: Whether rule is active
+        created_at:
+          type: string
+          format: date-time
+          description: Rule creation timestamp
+
+    WalletCreateRequest:
+      type: object
+      required:
+        - address
+      properties:
+        address:
+          type: string
+          description: Solana wallet address
+          pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
+        alias:
+          type: string
+          description: Human-readable wallet name
+          maxLength: 100
+        tags:
+          type: array
+          items:
+            type: string
+          description: Wallet categorization tags
+          maxItems: 10
+        metadata:
+          type: object
+          description: Additional wallet metadata
+
+    WalletUpdateRequest:
+      type: object
+      properties:
+        alias:
+          type: string
+          description: Human-readable wallet name
+          maxLength: 100
+        is_active:
+          type: boolean
+          description: Whether to actively monitor
+        tags:
+          type: array
+          items:
+            type: string
+          description: Wallet categorization tags
+          maxItems: 10
+        metadata:
+          type: object
+          description: Additional wallet metadata
+
+    SignalRuleCreateRequest:
+      type: object
+      required:
+        - name
+        - min_whales
+        - time_window_hours
+        - min_total_sol
+      properties:
+        name:
+          type: string
+          description: Rule name
+          maxLength: 100
+        min_whales:
+          type: integer
+          description: Minimum number of whales
+          minimum: 1
+          maximum: 100
+        time_window_hours:
+          type: integer
+          description: Time window in hours
+          minimum: 1
+          maximum: 24
+        min_total_sol:
+          type: number
+          format: double
+          description: Minimum total SOL
+          minimum: 0
+          maximum: 10000
+        is_active:
+          type: boolean
+          description: Whether rule is active
+          default: true
+
+    SignalRuleUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Rule name
+          maxLength: 100
+        min_whales:
+          type: integer
+          description: Minimum number of whales
+          minimum: 1
+          maximum: 100
+        time_window_hours:
+          type: integer
+          description: Time window in hours
+          minimum: 1
+          maximum: 24
+        min_total_sol:
+          type: number
+          format: double
+          description: Minimum total SOL
+          minimum: 0
+          maximum: 10000
+        is_active:
+          type: boolean
+          description: Whether rule is active
+
+    PortfolioSummary:
+      type: object
+      properties:
+        total_value:
+          type: number
+          format: double
+          description: Total portfolio value in SOL
+        open_positions:
+          type: integer
+          description: Number of open positions
+        total_invested:
+          type: number
+          format: double
+          description: Total SOL invested
+        total_pnl:
+          type: number
+          format: double
+          description: Total profit/loss in SOL
+        total_pnl_percent:
+          type: number
+          format: double
+          description: Total profit/loss percentage
+        win_rate:
+          type: number
+          format: double
+          description: Percentage of winning trades
+        average_win:
+          type: number
+          format: double
+          description: Average winning trade percentage
+        average_loss:
+          type: number
+          format: double
+          description: Average losing trade percentage
+
+    PerformanceMetrics:
+      type: object
+      properties:
+        total_trades:
+          type: integer
+          description: Total number of trades
+        winning_trades:
+          type: integer
+          description: Number of winning trades
+        losing_trades:
+          type: integer
+          description: Number of losing trades
+        win_rate:
+          type: number
+          format: double
+          description: Win rate percentage
+        profit_factor:
+          type: number
+          format: double
+          description: Ratio of gross profit to gross loss
+        sharpe_ratio:
+          type: number
+          format: double
+          description: Risk-adjusted return metric
+        max_drawdown:
+          type: number
+          format: double
+          description: Maximum drawdown in SOL
+        max_drawdown_percent:
+          type: number
+          format: double
+          description: Maximum drawdown percentage
+        average_hold_time:
+          type: number
+          format: double
+          description: Average position hold time in hours
+        roi:
+          type: number
+          format: double
+          description: Return on investment percentage
+
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - timestamp
+        - services
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Overall system status
+        timestamp:
+          type: string
+          format: date-time
+          description: Health check timestamp
+        services:
+          type: object
+          properties:
+            database:
+              $ref: '#/components/schemas/ServiceCheck'
+            websocket:
+              $ref: '#/components/schemas/ServiceCheck'
+            external_apis:
+              $ref: '#/components/schemas/ServiceCheck'
+
+    ServiceCheck:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+          description: Service status
+        message:
+          type: string
+          description: Status message
+        latency_ms:
+          type: integer
+          description: Service latency in milliseconds
+
+    ServiceStatus:
+      type: object
+      required:
+        - service
+        - status
+        - uptime
+        - version
+      properties:
+        service:
+          type: string
+          description: Service name
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Service status
+        uptime:
+          type: integer
+          description: Service uptime in seconds
+        version:
+          type: string
+          description: Service version
+        metrics:
+          type: object
+          description: Service-specific metrics
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Error code
+            message:
+              type: string
+              description: Error message
+            details:
+              type: object
+              description: Additional error details
+
+  responses:
+    BadRequestError:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid wallet address format"
+              details:
+                field: "address"
+                value: "invalid-address"
+
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "Invalid or missing API key"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "NOT_FOUND"
+              message: "Wallet not found"
+
+    ConflictError:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "CONFLICT"
+              message: "Wallet already exists"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred"
