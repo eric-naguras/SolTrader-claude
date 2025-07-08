@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS signal_rules (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
     min_whales INTEGER DEFAULT 3,
-    time_window_hours INTEGER DEFAULT 1,
+    time_window_hours NUMERIC(5, 2) DEFAULT 1.0,
     min_total_sol NUMERIC(20, 9) DEFAULT 10,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()

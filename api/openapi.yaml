@@ -1004,9 +1004,11 @@ components:
           minimum: 1
           example: 3
         time_window_hours:
-          type: integer
+          type: number
+          format: double
           description: Time window in hours
-          minimum: 1
+          minimum: 0.1
+          maximum: 24
           example: 1
         min_total_sol:
           type: number
@@ -1083,9 +1085,10 @@ components:
           minimum: 1
           maximum: 100
         time_window_hours:
-          type: integer
+          type: number
+          format: double
           description: Time window in hours
-          minimum: 1
+          minimum: 0.1
           maximum: 24
         min_total_sol:
           type: number
@@ -1111,9 +1114,10 @@ components:
           minimum: 1
           maximum: 100
         time_window_hours:
-          type: integer
+          type: number
+          format: double
           description: Time window in hours
-          minimum: 1
+          minimum: 0.1
           maximum: 24
         min_total_sol:
           type: number
