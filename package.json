@@ -13,12 +13,19 @@
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"packages/**/*.{ts,tsx,json,md}\"",
     "typecheck": "tsc --noEmit",
+    "setup": "./setup.sh",
     "db:migrate": "npm run migrate -w @sonar/database",
+    "db:seed": "npm run seed -w @sonar/database",
+    "db:reset": "npm run reset -w @sonar/database",
     "whale-watcher": "npm run start -w @sonar/whale-watcher",
     "notifier": "npm run start -w @sonar/notifier",
     "paper-trader": "npm run start -w @sonar/paper-trader",
     "cli": "npm run start -w @sonar/cli",
-    "api": "npm run start -w @sonar/api"
+    "api": "npm run start -w @sonar/api",
+    "start:all": "pm2 start ecosystem.config.js",
+    "stop:all": "pm2 stop all",
+    "logs": "pm2 logs",
+    "monitor": "pm2 monit"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
