@@ -4,7 +4,6 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import { table } from 'table';
 import { getSupabaseClient } from '@sonar/database';
-import type { TrackedWallet } from '@sonar/types';
 
 const supabase = getSupabaseClient();
 
