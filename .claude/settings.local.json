@@ -15,7 +15,12 @@
       "Bash(export:*)",
       "Bash(npm run dev:*)",
       "Bash(chmod:*)",
-      "Bash(./sonar-wallet-list.sh:*)"
+      "Bash(./sonar-wallet-list.sh:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(touch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

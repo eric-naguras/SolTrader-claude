@@ -1,0 +1,65 @@
+<table>
+    <thead>
+        <tr>
+            <th></th>
+            <th>Alias</th>
+            <th>Address</th>
+            <th>Tags</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody id="wallets-list">
+        <tr>
+            <td colspan="6" style="text-align: center;">
+                <span aria-busy="true">Loading wallets...</span>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<script>
+// Fetch wallets and populate table
+fetch('http://localhost:3001/api/wallets')
+    .then(r => r.json())
+    .then(data => {
+        const tbody = document.getElementById('wallets-list');
+        tbody.innerHTML = '';
+        
+        if (data.wallets.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No wallets tracked yet</td></tr>';
+            return;
+        }
+        
+        data.wallets.forEach(wallet => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><span class="wallet-color" style="background-color: ${wallet.ui_color || '#4338ca'}"></span></td>
+                <td>${wallet.alias || '-'}</td>
+                <td><code>${wallet.address.slice(0, 4)}...${wallet.address.slice(-4)}</code></td>
+                <td>${wallet.tags ? wallet.tags.join(', ') : '-'}</td>
+                <td><span class="status-badge ${wallet.is_active ? 'active' : 'inactive'}">${wallet.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td>
+                    <button class="outline" onclick="toggleWallet('${wallet.address}')" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
+                        ${wallet.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    })
+    .catch(err => {
+        document.getElementById('wallets-list').innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--pico-del-color);">Failed to load wallets</td></tr>';
+    });
+
+// Toggle wallet function
+function toggleWallet(address) {
+    fetch(`http://localhost:3001/api/wallets/${address}/toggle`, { method: 'POST' })
+        .then(r => r.json())
+        .then(() => {
+            htmx.trigger('#wallets-table', 'refresh');
+            showToast('Wallet status updated', 'success');
+        })
+        .catch(() => showToast('Failed to update wallet', 'error'));
+}
+</script>

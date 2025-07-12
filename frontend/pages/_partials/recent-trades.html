@@ -1,0 +1,88 @@
+<div id="trades-feed">
+    <!-- Trades will be populated here -->
+</div>
+
+<script>
+// Fetch recent trades from Supabase view
+async function loadRecentTrades() {
+    // This would normally use Supabase client directly
+    // For now, we'll simulate with API endpoint
+    const response = await fetch('http://localhost:3001/api/health');
+    
+    // Placeholder content
+    const tradesHtml = `
+        <article class="feed-item">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong class="trade-type buy">BUY</strong>
+                    <span style="margin-left: 0.5rem;">0.5 SOL</span>
+                </div>
+                <small style="color: var(--pico-muted-color);">2m ago</small>
+            </div>
+            <div style="margin-top: 0.5rem;">
+                <span class="wallet-color" style="background-color: #4338ca;"></span>
+                <small>Smart Money #1</small>
+            </div>
+            <div style="margin-top: 0.25rem;">
+                <code style="font-size: 0.75rem;">Token: pump...xyz</code>
+            </div>
+        </article>
+        
+        <article class="feed-item">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong class="trade-type buy">BUY</strong>
+                    <span style="margin-left: 0.5rem;">2.5 SOL</span>
+                </div>
+                <small style="color: var(--pico-muted-color);">5m ago</small>
+            </div>
+            <div style="margin-top: 0.5rem;">
+                <span class="wallet-color" style="background-color: #dc2626;"></span>
+                <small>Insider Wallet</small>
+            </div>
+            <div style="margin-top: 0.25rem;">
+                <code style="font-size: 0.75rem;">Token: doge...abc</code>
+            </div>
+        </article>
+    `;
+    
+    document.getElementById('trades-feed').innerHTML = tradesHtml;
+}
+
+// Load trades on page load
+loadRecentTrades();
+
+// Listen for real-time updates via SSE
+document.addEventListener('htmx:sseMessage', (event) => {
+    if (event.detail.data.type === 'new_trade') {
+        // Add new trade to feed
+        const trade = event.detail.data.trade;
+        const newTrade = document.createElement('article');
+        newTrade.className = 'feed-item';
+        newTrade.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong class="trade-type ${trade.trade_type.toLowerCase()}">${trade.trade_type}</strong>
+                    <span style="margin-left: 0.5rem;">${trade.sol_amount} SOL</span>
+                </div>
+                <small style="color: var(--pico-muted-color);">just now</small>
+            </div>
+            <div style="margin-top: 0.5rem;">
+                <span class="wallet-color" style="background-color: ${trade.wallet_color || '#4338ca'};"></span>
+                <small>${trade.wallet_alias || trade.wallet_address}</small>
+            </div>
+            <div style="margin-top: 0.25rem;">
+                <code style="font-size: 0.75rem;">Token: ${trade.token_symbol || trade.coin_address}</code>
+            </div>
+        `;
+        
+        const feed = document.getElementById('trades-feed');
+        feed.insertBefore(newTrade, feed.firstChild);
+        
+        // Keep only last 10 trades
+        while (feed.children.length > 10) {
+            feed.removeChild(feed.lastChild);
+        }
+    }
+});
+</script>

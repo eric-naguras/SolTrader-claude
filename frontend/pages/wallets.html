@@ -1,0 +1,52 @@
+<section x-data="walletForm">
+    <h1>Tracked Wallets</h1>
+    
+    <!-- Add Wallet Form -->
+    <details :open="showForm">
+        <summary role="button" @click="showForm = !showForm">Add New Wallet</summary>
+        <form @submit.prevent="submitForm">
+            <div class="grid">
+                <div>
+                    <label for="address">
+                        Wallet Address
+                        <input type="text" id="address" x-model="address" required 
+                               placeholder="Enter Solana wallet address">
+                    </label>
+                </div>
+                <div>
+                    <label for="alias">
+                        Alias (Optional)
+                        <input type="text" id="alias" x-model="alias" 
+                               placeholder="e.g., Smart Money #1">
+                    </label>
+                </div>
+            </div>
+            
+            <div class="grid">
+                <div>
+                    <label for="tags">
+                        Tags (comma-separated)
+                        <input type="text" id="tags" x-model="tags" 
+                               placeholder="e.g., whale, insider, kol">
+                    </label>
+                </div>
+                <div>
+                    <label for="ui_color">
+                        Display Color
+                        <input type="color" id="ui_color" x-model="ui_color">
+                    </label>
+                </div>
+            </div>
+            
+            <div class="grid">
+                <button type="submit">Add Wallet</button>
+                <button type="button" class="secondary" @click="showForm = false">Cancel</button>
+            </div>
+        </form>
+    </details>
+
+    <!-- Wallets Table -->
+    <div id="wallets-table" hx-get="/htmx/partials/wallets-table" hx-trigger="load, refresh">
+        <article aria-busy="true">Loading wallets...</article>
+    </div>
+</section>

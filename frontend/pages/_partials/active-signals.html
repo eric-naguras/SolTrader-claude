@@ -1,0 +1,71 @@
+<div id="signals-container">
+    <!-- Signals will be populated here -->
+</div>
+
+<script>
+// Placeholder active signals
+const signalsHtml = `
+    <article style="border-left: 4px solid var(--pico-primary); padding-left: 1rem;">
+        <header>
+            <strong>BONK</strong>
+            <small style="float: right; color: var(--pico-muted-color);">15m ago</small>
+        </header>
+        <p style="margin: 0.5rem 0;">
+            <span class="status-badge open">OPEN</span>
+            <span style="margin-left: 1rem;">3 whales bought</span>
+        </p>
+        <small>
+            <code>pump...xyz</code>
+            <a href="https://dexscreener.com/solana/pump...xyz" target="_blank" style="margin-left: 1rem;">View on DexScreener →</a>
+        </small>
+    </article>
+    
+    <article style="border-left: 4px solid var(--pico-primary); padding-left: 1rem;">
+        <header>
+            <strong>PEPE2.0</strong>
+            <small style="float: right; color: var(--pico-muted-color);">1h ago</small>
+        </header>
+        <p style="margin: 0.5rem 0;">
+            <span class="status-badge open">OPEN</span>
+            <span style="margin-left: 1rem;">5 whales bought</span>
+        </p>
+        <small>
+            <code>doge...abc</code>
+            <a href="https://dexscreener.com/solana/doge...abc" target="_blank" style="margin-left: 1rem;">View on DexScreener →</a>
+        </small>
+    </article>
+`;
+
+document.getElementById('signals-container').innerHTML = signalsHtml;
+
+// Listen for new signals via SSE
+document.addEventListener('htmx:sseMessage', (event) => {
+    if (event.detail.data.type === 'new_signal') {
+        const signal = event.detail.data.signal;
+        const newSignal = document.createElement('article');
+        newSignal.style.cssText = 'border-left: 4px solid var(--pico-primary); padding-left: 1rem;';
+        newSignal.innerHTML = `
+            <header>
+                <strong>${signal.token_symbol || 'Unknown'}</strong>
+                <small style="float: right; color: var(--pico-muted-color);">just now</small>
+            </header>
+            <p style="margin: 0.5rem 0;">
+                <span class="status-badge open">OPEN</span>
+                <span style="margin-left: 1rem;">${signal.whale_count} whales bought</span>
+            </p>
+            <small>
+                <code>${signal.coin_address}</code>
+                <a href="https://dexscreener.com/solana/${signal.coin_address}" target="_blank" style="margin-left: 1rem;">View on DexScreener →</a>
+            </small>
+        `;
+        
+        const container = document.getElementById('signals-container');
+        container.insertBefore(newSignal, container.firstChild);
+        
+        // Keep only last 5 signals
+        while (container.children.length > 5) {
+            container.removeChild(container.lastChild);
+        }
+    }
+});
+</script>

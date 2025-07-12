@@ -1,0 +1,43 @@
+<div class="stats-grid" hx-get="/api/stats" hx-trigger="load" hx-target="this" hx-swap="outerHTML">
+    <article class="stat-card">
+        <h3 id="active-wallets">-</h3>
+        <p>Active Wallets</p>
+    </article>
+    <article class="stat-card">
+        <h3 id="open-positions">-</h3>
+        <p>Open Positions</p>
+    </article>
+    <article class="stat-card">
+        <h3 id="win-rate">-</h3>
+        <p>Win Rate</p>
+    </article>
+    <article class="stat-card">
+        <h3 id="total-pnl">-</h3>
+        <p>Total PnL</p>
+    </article>
+</div>
+
+<script>
+// Fetch stats from API and update
+fetch('http://localhost:3001/api/trades/stats')
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('win-rate').textContent = data.stats.winRate.toFixed(1) + '%';
+        document.getElementById('total-pnl').textContent = (data.stats.totalPnL > 0 ? '+' : '') + data.stats.totalPnL.toFixed(1) + '%';
+    });
+
+// Fetch wallet count
+fetch('http://localhost:3001/api/wallets')
+    .then(r => r.json())
+    .then(data => {
+        const activeCount = data.wallets.filter(w => w.is_active).length;
+        document.getElementById('active-wallets').textContent = activeCount;
+    });
+
+// Fetch open positions
+fetch('http://localhost:3001/api/trades/positions')
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('open-positions').textContent = data.positions.length;
+    });
+</script>

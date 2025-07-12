@@ -1,195 +1,150 @@
-# Sonar Platform - Phase 1
+# Sonar Platform - Simplified Architecture
 
-A sophisticated whale wallet intelligence platform for the Solana ecosystem that monitors high-net-worth wallet activity to identify early investment opportunities in memecoins.
+A whale wallet intelligence system for Solana that monitors high-net-worth wallet activity to identify early memecoin investment opportunities.
 
+## Architecture
 
-## 🚀 Quick Start
+This is the simplified, runtime-agnostic version of Sonar Platform featuring:
 
-### Prerequisites
+- **Backend**: Hono framework (runs on Cloudflare, Deno, Bun, Node)
+- **Frontend**: HTMX + Alpine.js + Pico CSS
+- **Database**: Supabase (PostgreSQL with real-time)
+- **Services**: Whale monitoring & notifications
 
-- Node.js 18+ 
-- npm or yarn
-- Supabase account
-- Helius API key
-- Telegram Bot Token and/or Discord Webhook (optional)
+## Project Structure
 
-### Installation
+```
+sonar-platform/
+├── backend/
+│   ├── src/
+│   │   ├── api/          # Hono API server
+│   │   ├── services/     # Whale watcher & notifier
+│   │   └── lib/          # Shared utilities
+│   └── package.json
+├── frontend/
+│   ├── public/           # Static assets
+│   ├── pages/            # HTMX page fragments
+│   └── server.ts         # Static file server
+├── scripts/              # Database scripts
+└── docs/                 # Documentation
+```
 
-1. Clone the repository and install dependencies:
+## Setup
+
+### 1. Database Setup
+
+1. Create a Supabase project at https://supabase.com
+2. Run `scripts/supabase-schema.sql` in the SQL editor
+3. Run `scripts/database-updates.sql` for UI-specific features
+
+### 2. Environment Configuration
+
+Copy `.env.example` to `.env` in the backend folder:
 
 ```bash
-cd sonar-platform
+cd backend
+cp .env.example .env
+```
+
+Configure your environment variables:
+- `SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_ANON_KEY` - Supabase anonymous key
+- `HELIUS_API_KEY` - Required for blockchain data
+
+### 3. Install Dependencies
+
+```bash
+# Backend
+cd backend
+npm install
+
+# Frontend
+cd ../frontend
 npm install
 ```
 
-2. Set up your environment variables:
+## Running the Application
+
+### Development Mode
+
+Start all services in separate terminals:
 
 ```bash
-cp .env.example .env
-# Edit .env with your credentials
+# Terminal 1: API Server
+cd backend
+npm run dev
+
+# Terminal 2: Background Services
+cd backend
+npm run dev:services
+
+# Terminal 3: Frontend
+cd frontend
+npm run dev
 ```
 
-3. Set up the Supabase database:
+Access the application at http://localhost:3000
+
+### Production Mode
 
 ```bash
-# Copy the contents of scripts/supabase-schema.sql
-# Run it in your Supabase SQL editor
+# Build
+cd backend && npm run build
+cd ../frontend && npm run build
+
+# Run
+cd backend && npm start          # API on port 3001
+cd backend && npm start:services  # Services
+cd ../frontend && npm start       # Frontend on port 3000
 ```
 
-4. Build the project:
+## Features
 
-```bash
-npm run build
-```
+### Web Interface
+- **Dashboard**: Real-time whale activity feed and signals
+- **Wallets**: Manage tracked wallets with custom colors and tags
+- **Trades**: View trade history and performance metrics
 
-## 🏗️ Architecture
+### Core Services
+- **Whale Watcher**: Monitors Solana blockchain for whale trades
+- **Notifier**: Sends alerts via Telegram, Discord, and CLI
+- **Signal Processor**: Database triggers detect multi-whale patterns
 
-The platform consists of several microservices:
+## API Endpoints
 
-- **whale-watcher**: Monitors blockchain for whale wallet transactions
-- **notifier**: Sends alerts via Telegram/Discord when signals are detected
-- **cli**: Command-line interface for managing wallets and viewing data
+- `GET /api/health` - Service health check
+- `GET /api/wallets` - List tracked wallets
+- `POST /api/wallets` - Add new wallet
+- `PATCH /api/wallets/:address` - Update wallet
+- `POST /api/wallets/:address/toggle` - Toggle active status
+- `DELETE /api/wallets/:address` - Remove wallet
+- `GET /api/trades/positions` - Get open positions
+- `POST /api/trades/:id/close` - Close position
+- `GET /api/trades/history` - Trade history
+- `GET /api/trades/stats` - Performance statistics
+- `GET /api/events` - Server-sent events for real-time updates
 
-The signal detection logic is implemented as a PostgreSQL trigger for atomic, fast processing.
+## Deployment Options
 
-## 📦 Services
+This architecture is runtime-agnostic and can be deployed to:
+- **Cloudflare Workers** (with some modifications)
+- **Deno Deploy**
+- **Bun** runtime
+- **Traditional Node.js** hosts
+- **Docker** containers
 
-### Whale Watcher Service
+## Development Notes
 
-Monitors tracked wallets for buy/sell transactions:
+- The frontend uses HTMX for dynamic updates without JavaScript frameworks
+- Real-time updates use Server-Sent Events (SSE)
+- All database queries go through Supabase client
+- WebSocket connections to Helius are managed in whale-watcher service
+- No Node-specific APIs are used (fs, crypto, etc.)
 
-```bash
-cd services/whale-watcher
-npm run dev  # Development mode
-npm start    # Production mode
-```
+## Migration from Monorepo
 
-### Notifier Service
-
-Sends real-time alerts when signals are detected:
-
-```bash
-cd services/notifier
-npm run dev  # Development mode
-npm start    # Production mode
-```
-
-## 🛠️ CLI Usage
-
-The CLI tool manages wallets, views signals, and controls paper trading:
-
-```bash
-cd cli
-npm run build
-npm link  # Makes 'sonar' command available globally
-```
-
-### Wallet Management
-
-```bash
-# List all tracked wallets
-sonar wallet list
-
-# Add a new wallet
-sonar wallet add <address> --name "Whale 1" --tags "vip,early_buyer"
-
-# Remove a wallet
-sonar wallet remove <address>
-
-# Toggle wallet active/inactive
-sonar wallet toggle <address>
-
-# Import wallets from file
-sonar wallet import wallets.txt
-```
-
-### Signal Management
-
-```bash
-# View recent signals
-sonar signal list
-
-# View/update signal configuration
-sonar signal config
-sonar signal config --whales 3 --time 1 --amount 0.5
-```
-
-### Portfolio Management
-
-```bash
-# View portfolio trades
-sonar portfolio list
-sonar portfolio list --mode PAPER --status OPEN
-
-# Enable paper trading (automatically creates trades for new signals)
-sonar portfolio paper-trade
-```
-
-## 🔧 Configuration
-
-### Signal Detection Rules
-
-The system generates a signal when:
-- **N** or more unique whales buy the same token
-- Within **T** hours
-- With trades >= **M** SOL
-
-Default: 3 whales, 1 hour, 0.5 SOL
-
-Configure via CLI: `sonar signal config`
-
-### Database Schema
-
-- `tracked_wallets`: Wallets being monitored
-- `tokens`: SPL tokens seen in trades
-- `whale_trades`: All buy/sell transactions
-- `trade_signals`: Generated trading signals
-- `portfolio_trades`: Paper/live trade records
-
-## 🚦 Running in Production
-
-1. Use PM2 for process management:
-
-```bash
-npm install -g pm2
-
-# Start services
-pm2 start services/whale-watcher/dist/index.js --name whale-watcher
-pm2 start services/notifier/dist/index.js --name notifier
-
-# Monitor
-pm2 status
-pm2 logs
-```
-
-2. Enable PM2 startup:
-
-```bash
-pm2 startup
-pm2 save
-```
-
-## 📊 Monitoring
-
-- Check service logs: `pm2 logs <service-name>`
-- Monitor database: Supabase dashboard
-- View real-time data: `sonar signal list` or `sonar portfolio list`
-
-## 🔐 Security
-
-- All sensitive credentials stored in environment variables
-- Database uses Row Level Security (RLS)
-- No private keys are ever stored
-- Supabase handles authentication and authorization
-
-## 🎯 Next Steps (Phase 2+)
-
-- Automated trade execution via Jupiter/trading bots
-- Advanced exit strategies (trailing take-profit)
-- Whale discovery engine
-- Web dashboard
-- Machine learning optimization
-
-## 📝 License
-
-This project is private and proprietary.
+The original monorepo structure has been simplified:
+- Removed Turbo and workspace complexity
+- Consolidated packages into single backend/frontend
+- Preserved business logic from original services
+- CLI functionality can be recreated as needed

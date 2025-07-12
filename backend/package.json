@@ -1,0 +1,24 @@
+{
+  "name": "sonar-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Sonar platform backend - runtime agnostic",
+  "scripts": {
+    "dev": "tsx watch src/api/app.ts",
+    "dev:services": "tsx watch src/services/index.ts",
+    "build": "tsc",
+    "start": "node dist/api/app.js",
+    "start:services": "node dist/services/index.js"
+  },
+  "dependencies": {
+    "hono": "^3.11.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "helius-sdk": "^1.2.0",
+    "@solana/web3.js": "^1.87.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  }
+}

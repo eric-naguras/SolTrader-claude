@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonar Platform</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/sse.js"></script>
+    <script src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js" defer></script>
+</head>
+<body>
+    <nav class="container-fluid">
+        <ul>
+            <li><strong>Sonar Platform</strong></li>
+        </ul>
+        <ul>
+            <li><a href="#" hx-get="/htmx/dashboard" hx-target="#main-content" hx-push-url="true" class="nav-link" data-page="dashboard">Dashboard</a></li>
+            <li><a href="#" hx-get="/htmx/wallets" hx-target="#main-content" hx-push-url="true" class="nav-link" data-page="wallets">Wallets</a></li>
+            <li><a href="#" hx-get="/htmx/trades" hx-target="#main-content" hx-push-url="true" class="nav-link" data-page="trades">Trades</a></li>
+        </ul>
+    </nav>
+
+    <main class="container" id="main-content">
+        <!-- Initial load dashboard -->
+        <div hx-get="/htmx/dashboard" hx-trigger="load" hx-swap="outerHTML">
+            <article aria-busy="true">Loading...</article>
+        </div>
+    </main>
+
+    <!-- SSE Connection for real-time updates -->
+    <div hx-ext="sse" sse-connect="http://localhost:3001/api/events" style="display: none;">
+        <div sse-swap="message" hx-swap="none"></div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
