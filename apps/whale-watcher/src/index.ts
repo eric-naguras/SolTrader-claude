@@ -67,7 +67,7 @@ class WhaleWatcher {
         this.trackedWallets.set(wallet.address, wallet);
       }
 
-      logger.info(`Loaded ${wallets.length} active wallets for tracking`);
+      logger.info(`Loaded ${wallets.length} wallets`);
     } catch (error) {
       logger.error('Failed to load tracked wallets:', error);
     }
@@ -172,12 +172,8 @@ class WhaleWatcher {
         trade_timestamp: new Date(transaction.timestamp * 1000)
       });
 
-      logger.info(`Processed ${tradeType} trade:`, {
-        wallet: this.trackedWallets.get(walletAddress)?.alias || walletAddress,
-        token: tokenInfo?.symbol || tokenMint,
-        solAmount,
-        tokenAmount
-      });
+      // Structured log for UI parsing
+      logger.info(`Trade detected - Wallet: ${walletAddress} Token: ${tokenMint} Type: ${tradeType} Amount: ${solAmount}`);
     } catch (error) {
       logger.error('Failed to process swap event:', error);
     }

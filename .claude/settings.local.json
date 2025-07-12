@@ -2,7 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(npm install)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(find:*)",
+      "Bash(rm:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(ls:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm link:*)",
+      "Bash(sonar:*)",
+      "Bash(source .env)",
+      "Bash(export:*)",
+      "Bash(npm run dev:*)",
+      "Bash(chmod:*)",
+      "Bash(./sonar-wallet-list.sh:*)"
     ],
     "deny": []
   }

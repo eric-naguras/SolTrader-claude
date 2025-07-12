@@ -4,9 +4,8 @@
   "description": "Whale wallet intelligence platform for Solana",
   "private": true,
   "workspaces": [
-    "services/*",
-    "cli",
-    "shared/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
     "dev": "turbo run dev",

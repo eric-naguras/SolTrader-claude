@@ -2,6 +2,7 @@
 
 A sophisticated whale wallet intelligence platform for the Solana ecosystem that monitors high-net-worth wallet activity to identify early investment opportunities in memecoins.
 
+
 ## 🚀 Quick Start
 
 ### Prerequisites

@@ -82,7 +82,10 @@ VALUES (3, 1, 0.5);
 
 -- Function to check for multi-whale signals
 CREATE OR REPLACE FUNCTION check_for_signals()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
     config_rec RECORD;
     whale_count INTEGER;
@@ -156,6 +159,7 @@ ALTER TABLE tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whale_trades ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trade_signals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE portfolio_trades ENABLE ROW LEVEL SECURITY;
+ALTER TABLE signal_config ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for service access (adjust based on your auth strategy)
 -- For now, we'll create permissive policies for development
@@ -164,3 +168,4 @@ CREATE POLICY "Service full access" ON tokens FOR ALL USING (true);
 CREATE POLICY "Service full access" ON whale_trades FOR ALL USING (true);
 CREATE POLICY "Service full access" ON trade_signals FOR ALL USING (true);
 CREATE POLICY "Service full access" ON portfolio_trades FOR ALL USING (true);
+CREATE POLICY "Service full access" ON signal_config FOR ALL USING (true);

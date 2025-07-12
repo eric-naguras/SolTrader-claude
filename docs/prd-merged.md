@@ -12,6 +12,9 @@ The result is a detailed, non-redundant, and actionable blueprint designed to be
 **Version:** 2.0
 **Status:** Ready for Development
 
+Here is a video about creating MCP serevrs: https://www.youtube.com/watch?v=Zw3sfAIpeH8
+
+
 ## 1. Introduction & Vision
 
 ### 1.1 Executive Summary
