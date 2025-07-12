@@ -1,7 +1,6 @@
 # Dependencies
 node_modules/
-.pnp
-.pnp.js
+.npm
 
 # Production
 dist/
@@ -11,14 +10,15 @@ build/
 .env
 .env.local
 .env.*.local
+backend/.env
+frontend/.env
 
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
 
 # OS
 .DS_Store
@@ -33,10 +33,7 @@ Thumbs.db
 
 # Testing
 coverage/
-.nyc_output
-
-# Turbo
-.turbo
+.nyc_output/
 
 # TypeScript
 *.tsbuildinfo
@@ -47,3 +44,15 @@ coverage/
 # Temporary files
 tmp/
 temp/
+
+# Compiled JavaScript (we use TypeScript)
+backend/**/*.js
+backend/**/*.js.map
+backend/**/*.d.ts
+frontend/*.js
+frontend/*.js.map
+frontend/*.d.ts
+
+# Keep static frontend files
+!frontend/public/**/*.js
+!frontend/public/**/*.css
