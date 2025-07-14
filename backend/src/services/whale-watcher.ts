@@ -1,5 +1,6 @@
 import { Helius } from 'helius-sdk';
 import { supabase, type TrackedWallet, type WhaleTrade } from '../lib/supabase.js';
+import WebSocket from 'ws';
 
 interface ParsedSwap {
   source: string;
@@ -27,21 +28,38 @@ export class WhaleWatcher {
   }
 
   async start() {
-    console.log('[WhaleWatcher] Starting service...');
-    
-    // Load tracked wallets
-    await this.loadTrackedWallets();
-    
-    // Set up WebSocket subscriptions
-    await this.setupWebSocketSubscriptions();
-    
-    // Reload wallets periodically
-    setInterval(() => this.loadTrackedWallets(), 60000); // Every minute
-    
-    // Update heartbeat
-    setInterval(() => this.updateHeartbeat(), 30000); // Every 30 seconds
-    
-    console.log('[WhaleWatcher] Service started successfully');
+    try {
+      console.log('[WhaleWatcher] Starting service...');
+      
+      // Load tracked wallets
+      await this.loadTrackedWallets();
+      
+      // Only set up WebSocket if we have wallets to track
+      if (this.trackedWallets.size > 0) {
+        await this.setupWebSocketSubscriptions();
+      } else {
+        console.log('[WhaleWatcher] No active wallets to track. Waiting for wallets to be added...');
+      }
+      
+      // Reload wallets periodically
+      setInterval(async () => {
+        const previousSize = this.trackedWallets.size;
+        await this.loadTrackedWallets();
+        
+        // If we now have wallets and didn't before, start WebSocket
+        if (previousSize === 0 && this.trackedWallets.size > 0) {
+          await this.setupWebSocketSubscriptions();
+        }
+      }, 60000); // Every minute
+      
+      // Update heartbeat
+      setInterval(() => this.updateHeartbeat(), 30000); // Every 30 seconds
+      
+      console.log('[WhaleWatcher] Service started successfully');
+    } catch (error) {
+      console.error('[WhaleWatcher] Failed to start service:', error);
+      throw error;
+    }
   }
 
   private async loadTrackedWallets() {
@@ -94,42 +112,71 @@ export class WhaleWatcher {
         console.log('[WhaleWatcher] WebSocket connected');
         this.reconnectAttempts = 0;
         
-        // Subscribe to transactions for all tracked wallets
-        const subscribeMessage = {
+        // Subscribe to account changes for all tracked wallets
+        // Using standard Solana accountSubscribe which works with Helius
+        const subscriptions = addresses.map((address, index) => ({
           jsonrpc: "2.0",
-          id: 1,
-          method: "transactionSubscribe",
+          id: index + 1,
+          method: "accountSubscribe",
           params: [
+            address,
             {
-              accountInclude: addresses,
-            },
-            {
-              commitment: "confirmed",
               encoding: "jsonParsed",
-              transactionDetails: "full",
-              showRewards: false,
-              maxSupportedTransactionVersion: 0
+              commitment: "confirmed"
             }
           ]
-        };
+        }));
         
-        this.ws!.send(JSON.stringify(subscribeMessage));
+        // Send all subscriptions
+        subscriptions.forEach(sub => {
+          this.ws!.send(JSON.stringify(sub));
+        });
+        
         console.log(`[WhaleWatcher] Subscribed to ${addresses.length} wallets`);
+        
+        // Set up ping interval to keep connection alive
+        const pingInterval = setInterval(() => {
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ 
+              jsonrpc: "2.0", 
+              id: 999, 
+              method: "ping" 
+            }));
+          } else {
+            clearInterval(pingInterval);
+          }
+        }, 30000); // Ping every 30 seconds
       };
 
       this.ws.onmessage = async (event) => {
         try {
-          const message = JSON.parse(event.data);
+          const data = event.data.toString();
+          const message = JSON.parse(data);
           
-          // Handle subscription confirmation
-          if (message.result) {
-            console.log('[WhaleWatcher] Subscription confirmed:', message.result);
+          // Handle subscription confirmations
+          if (message.result && typeof message.id === 'number' && message.id <= this.trackedWallets.size) {
+            console.log(`[WhaleWatcher] Wallet ${message.id} subscription confirmed:`, message.result);
             return;
           }
           
-          // Handle transaction notifications
-          if (message.method === 'transactionNotification') {
-            await this.processTransaction(message.params);
+          // Handle ping response
+          if (message.id === 999) {
+            // Ping response received
+            return;
+          }
+          
+          // Handle error responses
+          if (message.error) {
+            console.error('[WhaleWatcher] RPC Error:', message.error);
+            return;
+          }
+          
+          // Handle account notifications
+          if (message.method === 'accountNotification' && message.params) {
+            // For account subscriptions, we need to fetch transactions differently
+            console.log('[WhaleWatcher] Account notification received for subscription:', message.params.subscription);
+            // We'll need to fetch recent transactions for this account
+            await this.checkAccountTransactions(message.params);
           }
         } catch (error) {
           console.error('[WhaleWatcher] Error processing message:', error);
@@ -259,23 +306,31 @@ export class WhaleWatcher {
   }
 
   private async updateHeartbeat() {
-    // Update a heartbeat timestamp in the database to show service is alive
-    const { error } = await supabase
-      .from('service_heartbeats')
-      .upsert({
-        service_name: 'whale-watcher',
-        last_heartbeat: new Date().toISOString(),
-        status: 'healthy',
-        metadata: {
-          tracked_wallets: this.trackedWallets.size,
-          websocket_connected: this.ws?.readyState === WebSocket.OPEN
-        }
-      }, {
-        onConflict: 'service_name'
-      });
+    try {
+      // Update a heartbeat timestamp in the database to show service is alive
+      const { error } = await supabase
+        .from('service_heartbeats')
+        .upsert({
+          service_name: 'whale-watcher',
+          last_heartbeat: new Date().toISOString(),
+          status: 'healthy',
+          metadata: {
+            tracked_wallets: this.trackedWallets.size,
+            websocket_connected: this.ws?.readyState === WebSocket.OPEN
+          }
+        }, {
+          onConflict: 'service_name'
+        });
 
-    if (error) {
-      console.error('[WhaleWatcher] Error updating heartbeat:', error);
+      if (error) {
+        // Only log if it's not a missing table error
+        if (!error.message?.includes('relation') && !error.message?.includes('does not exist')) {
+          console.error('[WhaleWatcher] Error updating heartbeat:', error);
+        }
+      }
+    } catch (error) {
+      // Silently ignore heartbeat errors to prevent service crashes
+      console.debug('[WhaleWatcher] Heartbeat update skipped:', error);
     }
   }
 

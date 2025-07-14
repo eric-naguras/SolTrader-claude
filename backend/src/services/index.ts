@@ -1,9 +1,15 @@
 import { WhaleWatcher } from './whale-watcher.js';
+import { WhaleWatcherPolling } from './whale-watcher-polling.js';
+import { WhaleWatcherStream } from './whale-watcher-stream.js';
 import { NotifierService } from './notifier.js';
 import { config } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 // Load environment variables
-config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+config({ path: join(__dirname, '../../.env') });
 
 // Service manager
 class ServiceManager {
@@ -12,9 +18,9 @@ class ServiceManager {
   async start() {
     console.log('[ServiceManager] Starting all services...');
 
-    // Start WhaleWatcher
+    // Start WhaleWatcher - use streaming version for real-time monitoring
     try {
-      const whaleWatcher = new WhaleWatcher();
+      const whaleWatcher = new WhaleWatcherStream();
       await whaleWatcher.start();
       this.services.set('whale-watcher', whaleWatcher);
     } catch (error) {

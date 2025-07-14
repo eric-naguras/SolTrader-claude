@@ -9,31 +9,34 @@ if [ "$NODE_VERSION" -lt 18 ]; then
     exit 1
 fi
 
-# Install dependencies
-echo "📦 Installing dependencies..."
-npm install
+# Install backend dependencies
+echo "📦 Installing backend dependencies..."
+cd backend && npm install && cd ..
 
-# Build the project
-echo "🔨 Building project..."
-npm run build
+# Install frontend dependencies
+echo "📦 Installing frontend dependencies..."
+cd frontend && npm install && cd ..
 
 # Check for .env file
-if [ ! -f .env ]; then
-    echo "⚠️  No .env file found. Creating from example..."
-    cp .env.example .env
-    echo "📝 Please edit .env with your configuration"
+if [ ! -f backend/.env ]; then
+    echo "⚠️  No backend/.env file found. Creating from example..."
+    if [ -f backend/.env.example ]; then
+        cp backend/.env.example backend/.env
+        echo "📝 Please edit backend/.env with your configuration"
+    else
+        echo "❌ No .env.example found in backend directory"
+    fi
 fi
-
-# Make CLI available
-echo "🛠️  Setting up CLI..."
-cd cli && npm link && cd ..
 
 echo "✅ Setup complete!"
 echo ""
 echo "Next steps:"
-echo "1. Edit .env with your Supabase and Helius credentials"
-echo "2. Run the schema in scripts/supabase-schema.sql in your Supabase SQL editor"
-echo "3. Start the services:"
-echo "   - cd services/whale-watcher && npm run dev"
-echo "   - cd services/notifier && npm run dev"
-echo "4. Use the CLI: sonar wallet list"
+echo "1. Edit backend/.env with your Supabase and Helius credentials"
+echo "2. Run these SQL scripts in your Supabase SQL editor:"
+echo "   - scripts/supabase-schema.sql (initial setup)"
+echo "   - scripts/database-updates.sql (UI features)"
+echo "3. Start the services in separate terminals:"
+echo "   - Backend API: cd backend && npm run dev"
+echo "   - Backend Services: cd backend && npm run dev:services"
+echo "   - Frontend: cd frontend && npm run dev"
+echo "4. Open http://localhost:3000 in your browser"

@@ -1,4 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
+import { config } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+// Load environment variables if not already loaded
+if (!process.env.SUPABASE_URL) {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  config({ path: join(__dirname, '../../.env') });
+}
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
@@ -18,6 +28,13 @@ export interface TrackedWallet {
   metadata?: Record<string, any>;
   created_at: string;
   ui_color?: string;
+  twitter_handle?: string;
+  telegram_channel?: string;
+  streaming_channel?: string;
+  image_data?: string; // Base64 encoded image
+  notes?: string;
+  sol_balance?: number;
+  last_balance_check?: string;
 }
 
 export interface Token {
@@ -49,4 +66,21 @@ export interface TradeSignal {
   created_at: string;
   updated_at: string;
   user_notes?: string;
+}
+
+export interface ServiceConfig {
+  id: string;
+  service_name: string;
+  log_categories: {
+    connection: boolean;
+    wallet: boolean;
+    trade: boolean;
+    multiWhale: boolean;
+    transaction: boolean;
+    dataFlow: boolean;
+    health: boolean;
+    debug: boolean;
+  };
+  other_settings?: Record<string, any>;
+  updated_at: string;
 }

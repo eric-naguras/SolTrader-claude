@@ -1,52 +1,67 @@
 <div id="trades-feed">
-    <!-- Trades will be populated here -->
+    <!-- Trades will be loaded from database -->
 </div>
 
 <script>
-// Fetch recent trades from Supabase view
+// Load real trades from database
 async function loadRecentTrades() {
-    // This would normally use Supabase client directly
-    // For now, we'll simulate with API endpoint
-    const response = await fetch('http://localhost:3001/api/health');
-    
-    // Placeholder content
-    const tradesHtml = `
-        <article class="feed-item">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <strong class="trade-type buy">BUY</strong>
-                    <span style="margin-left: 0.5rem;">0.5 SOL</span>
-                </div>
-                <small style="color: var(--pico-muted-color);">2m ago</small>
-            </div>
-            <div style="margin-top: 0.5rem;">
-                <span class="wallet-color" style="background-color: #4338ca;"></span>
-                <small>Smart Money #1</small>
-            </div>
-            <div style="margin-top: 0.25rem;">
-                <code style="font-size: 0.75rem;">Token: pump...xyz</code>
-            </div>
-        </article>
+    try {
+        const response = await fetch('/api/trades');
+        const trades = await response.json();
         
-        <article class="feed-item">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <strong class="trade-type buy">BUY</strong>
-                    <span style="margin-left: 0.5rem;">2.5 SOL</span>
-                </div>
-                <small style="color: var(--pico-muted-color);">5m ago</small>
-            </div>
-            <div style="margin-top: 0.5rem;">
-                <span class="wallet-color" style="background-color: #dc2626;"></span>
-                <small>Insider Wallet</small>
-            </div>
-            <div style="margin-top: 0.25rem;">
-                <code style="font-size: 0.75rem;">Token: doge...abc</code>
-            </div>
-        </article>
-    `;
+        const feed = document.getElementById('trades-feed');
+        
+        if (trades.length === 0) {
+            feed.innerHTML = '<p style="color: var(--pico-muted-color); text-align: center; padding: 2rem;">No recent trades found</p>';
+            return;
+        }
+        
+        const tradesHtml = trades.map(trade => {
+            const tokenSymbol = trade.tokens?.symbol || 'Unknown';
+            const walletAlias = trade.tracked_wallets?.alias || `${trade.wallet_address.slice(0, 8)}...${trade.wallet_address.slice(-4)}`;
+            const walletColor = trade.tracked_wallets?.ui_color || '#4338ca';
+            const timeAgo = getTimeAgo(trade.trade_timestamp);
+            const solAmount = trade.sol_amount ? trade.sol_amount.toFixed(2) : '0.00';
+            
+            return `
+                <article class="feed-item">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong class="trade-type ${trade.trade_type.toLowerCase()}">${trade.trade_type}</strong>
+                            <span style="margin-left: 0.5rem;">${solAmount} SOL</span>
+                        </div>
+                        <small style="color: var(--pico-muted-color);">${timeAgo}</small>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <span class="wallet-color" style="background-color: ${walletColor};"></span>
+                        <small>${walletAlias}</small>
+                    </div>
+                    <div style="margin-top: 0.25rem;">
+                        <code style="font-size: 0.75rem;">Token: ${tokenSymbol}</code>
+                    </div>
+                </article>
+            `;
+        }).join('');
+        
+        feed.innerHTML = tradesHtml;
+    } catch (error) {
+        console.error('Error loading trades:', error);
+        document.getElementById('trades-feed').innerHTML = '<p style="color: var(--pico-color-red-500);">Error loading trades</p>';
+    }
+}
+
+function getTimeAgo(timestamp) {
+    const now = new Date();
+    const tradeTime = new Date(timestamp);
+    const diffMs = now - tradeTime;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
     
-    document.getElementById('trades-feed').innerHTML = tradesHtml;
+    if (diffDays > 0) return `${diffDays}d ago`;
+    if (diffHours > 0) return `${diffHours}h ago`;
+    if (diffMins > 0) return `${diffMins}m ago`;
+    return 'just now';
 }
 
 // Load trades on page load

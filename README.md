@@ -50,6 +50,7 @@ Configure your environment variables:
 - `SUPABASE_URL` - Your Supabase project URL
 - `SUPABASE_ANON_KEY` - Supabase anonymous key
 - `HELIUS_API_KEY` - Required for blockchain data
+- `API_SECRET` - Secret key for API authentication (set a secure random string)
 
 ### 3. Install Dependencies
 
@@ -61,6 +62,17 @@ npm install
 # Frontend
 cd ../frontend
 npm install
+```
+
+### 4. Configure Frontend API Key
+
+Edit `frontend/public/js/config.js` and set the API key to match your backend `API_SECRET`:
+
+```javascript
+window.CONFIG = {
+  API_URL: 'http://localhost:3001',
+  API_KEY: 'your-api-key-here' // Must match API_SECRET in backend .env
+};
 ```
 
 ## Running the Application

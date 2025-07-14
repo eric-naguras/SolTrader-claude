@@ -84,6 +84,37 @@
     vertical-align: middle;
 }
 
+/* Social links in wallet table */
+table a {
+    text-decoration: none;
+    margin: 0 0.25rem;
+    font-size: 1.1rem;
+}
+
+table a:hover {
+    opacity: 0.8;
+}
+
+/* Balance display */
+span[id^="balance-"] {
+    cursor: help;
+}
+
+/* Small buttons */
+button[id^="balance-btn-"] {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Currency toggle */
+.currency-toggle {
+    transition: color 0.2s ease;
+}
+
+.currency-toggle:hover {
+    color: var(--pico-primary);
+}
+
 /* Stats grid */
 .stats-grid {
     display: grid;
@@ -153,4 +184,64 @@ table {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Clickable wallet names */
+table td a strong {
+    transition: color 0.2s ease;
+}
+
+table td a:hover strong {
+    color: var(--pico-primary);
+}
+
+/* Modal styling */
+dialog {
+    max-width: 600px;
+    overflow-y: auto;
+}
+
+dialog article {
+    margin: 0;
+}
+
+/* Image paste area */
+.paste-area {
+    border: 2px dashed var(--pico-muted-border-color);
+    border-radius: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+    cursor: default;
+    transition: all 0.2s ease;
+    background-color: var(--pico-background-color);
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.paste-area:focus {
+    outline: 2px solid var(--pico-primary);
+    outline-offset: 2px;
+}
+
+.paste-area.has-image {
+    border-style: solid;
+    padding: 1rem;
+    cursor: default;
+}
+
+.paste-placeholder {
+    color: var(--pico-muted-color);
+    font-size: 0.875rem;
+}
+
+.paste-area button.outline {
+    margin: 0;
+}
+
+.paste-area img {
+    display: block;
+    margin: 0 auto;
+    border-radius: 0.25rem;
 }

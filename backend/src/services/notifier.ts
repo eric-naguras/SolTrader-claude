@@ -191,21 +191,29 @@ export class NotifierService {
   }
 
   private async updateHeartbeat() {
-    const { error } = await supabase
-      .from('service_heartbeats')
-      .upsert({
-        service_name: 'notifier',
-        last_heartbeat: new Date().toISOString(),
-        status: 'healthy',
-        metadata: {
-          channels: Object.keys(this.channels).filter(k => k !== 'cli')
-        }
-      }, {
-        onConflict: 'service_name'
-      });
+    try {
+      const { error } = await supabase
+        .from('service_heartbeats')
+        .upsert({
+          service_name: 'notifier',
+          last_heartbeat: new Date().toISOString(),
+          status: 'healthy',
+          metadata: {
+            channels: Object.keys(this.channels).filter(k => k !== 'cli')
+          }
+        }, {
+          onConflict: 'service_name'
+        });
 
-    if (error) {
-      console.error('[Notifier] Error updating heartbeat:', error);
+      if (error) {
+        // Only log if it's not a missing table error
+        if (!error.message?.includes('relation') && !error.message?.includes('does not exist')) {
+          console.error('[Notifier] Error updating heartbeat:', error);
+        }
+      }
+    } catch (error) {
+      // Silently ignore heartbeat errors to prevent service crashes
+      console.debug('[Notifier] Heartbeat update skipped:', error);
     }
   }
 

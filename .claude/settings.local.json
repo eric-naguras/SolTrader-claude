@@ -20,7 +20,17 @@
       "Bash(git checkout:*)",
       "Bash(touch:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(true)",
+      "Bash(curl:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm run test:quick:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run monitor:*)",
+      "Bash(grep:*)",
+      "Bash(timeout 35 npx tsx test-websocket.ts)",
+      "Bash(timeout 20 npx tsx debug-whale-watcher.ts)",
+      "Bash(kill:*)"
     ],
     "deny": []
   }

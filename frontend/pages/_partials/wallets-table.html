@@ -4,6 +4,8 @@
             <th></th>
             <th>Alias</th>
             <th>Address</th>
+            <th>Socials</th>
+            <th>Balance</th>
             <th>Tags</th>
             <th>Status</th>
             <th>Actions</th>
@@ -11,7 +13,7 @@
     </thead>
     <tbody id="wallets-list">
         <tr>
-            <td colspan="6" style="text-align: center;">
+            <td colspan="8" style="text-align: center;">
                 <span aria-busy="true">Loading wallets...</span>
             </td>
         </tr>
@@ -19,24 +21,123 @@
 </table>
 
 <script>
+// Store wallets data globally for editing
+window.walletsData = {};
+
+// Store display currency state
+window.displayCurrency = window.displayCurrency || 'SOL';
+window.solPrice = window.solPrice || null;
+
+// Format balance display with thousand separators
+function formatBalance(balance, currency = 'SOL') {
+    if (balance === null || balance === undefined) return '-';
+    
+    if (currency === 'USD' && window.solPrice) {
+        const usdValue = balance * window.solPrice;
+        return '$' + usdValue.toLocaleString('en-US', { 
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 2 
+        });
+    }
+    
+    // For SOL amounts less than 1, show 3 decimals
+    if (balance < 1 && balance > 0) {
+        return balance.toFixed(3);
+    }
+    
+    // For whole SOL amounts, add thousand separators
+    return Math.round(balance).toLocaleString('en-US');
+}
+
+// Fetch SOL price
+async function fetchSolPrice() {
+    try {
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+        const data = await response.json();
+        window.solPrice = data.solana.usd;
+    } catch (error) {
+        console.error('Failed to fetch SOL price:', error);
+        window.solPrice = null;
+    }
+}
+
+// Toggle currency display
+function toggleCurrency() {
+    window.displayCurrency = window.displayCurrency === 'SOL' ? 'USD' : 'SOL';
+    
+    // Update all balance displays
+    document.querySelectorAll('[id^="balance-"]').forEach(span => {
+        const address = span.id.replace('balance-', '');
+        const wallet = window.walletsData[address];
+        if (wallet && wallet.sol_balance !== null && wallet.sol_balance !== undefined) {
+            span.textContent = formatBalance(wallet.sol_balance, window.displayCurrency);
+        }
+    });
+    
+    // Update currency labels
+    document.querySelectorAll('.currency-toggle').forEach(el => {
+        el.textContent = window.displayCurrency;
+    });
+}
+
 // Fetch wallets and populate table
-fetch('http://localhost:3001/api/wallets')
+fetch(`${window.CONFIG.API_URL}/api/wallets`, {
+    headers: {
+        'X-API-Key': window.CONFIG.API_KEY
+    }
+})
     .then(r => r.json())
     .then(data => {
         const tbody = document.getElementById('wallets-list');
         tbody.innerHTML = '';
         
         if (data.wallets.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No wallets tracked yet</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No wallets tracked yet</td></tr>';
             return;
         }
         
         data.wallets.forEach(wallet => {
+            // Store wallet data for editing
+            window.walletsData[wallet.address] = wallet;
             const row = document.createElement('tr');
+            
+            // Build socials display
+            let socials = [];
+            if (wallet.twitter_handle) socials.push(`<a href="https://twitter.com/${wallet.twitter_handle.replace('@', '')}" target="_blank" title="Twitter">🐦</a>`);
+            if (wallet.telegram_channel) socials.push(`<a href="${wallet.telegram_channel.startsWith('http') ? wallet.telegram_channel : 'https://' + wallet.telegram_channel}" target="_blank" title="Telegram">💬</a>`);
+            if (wallet.streaming_channel) socials.push(`<a href="${wallet.streaming_channel.startsWith('http') ? wallet.streaming_channel : 'https://' + wallet.streaming_channel}" target="_blank" title="Stream">📺</a>`);
+            
             row.innerHTML = `
-                <td><span class="wallet-color" style="background-color: ${wallet.ui_color || '#4338ca'}"></span></td>
-                <td>${wallet.alias || '-'}</td>
+                <td>
+                    ${wallet.image_data ? `<img src="${wallet.image_data}" alt="" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">` : `<span class="wallet-color" style="background-color: ${wallet.ui_color || '#4338ca'}"></span>`}
+                </td>
+                <td>
+                    <a href="#" onclick="editWallet('${wallet.address}'); return false;" style="text-decoration: none; color: inherit; cursor: pointer;">
+                        <strong>${wallet.alias || wallet.address.slice(0, 8) + '...'}</strong>
+                    </a>
+                    ${wallet.notes ? `<br><small style="color: var(--pico-muted-color);">${wallet.notes.split('\\n')[0].substring(0, 50)}${wallet.notes.split('\\n')[0].length > 50 ? '...' : ''}</small>` : ''}
+                </td>
                 <td><code>${wallet.address.slice(0, 4)}...${wallet.address.slice(-4)}</code></td>
+                <td>${socials.length > 0 ? socials.join(' ') : '-'}</td>
+                <td>
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span id="balance-${wallet.address}" 
+                              title="${wallet.last_balance_check ? formatTimestamp(wallet.last_balance_check) : 'Never checked'}"
+                              style="display: inline-block; min-width: 8ch; text-align: right;">
+                            ${formatBalance(wallet.sol_balance, window.displayCurrency)}
+                        </span>
+                        <span class="currency-toggle" 
+                              onclick="toggleCurrency()" 
+                              style="margin-left: 0.25rem; cursor: pointer; text-decoration: underline;">
+                            ${window.displayCurrency}
+                        </span>
+                        <button class="outline" onclick="updateBalance('${wallet.address}')" 
+                                style="padding: 0.125rem 0.25rem; font-size: 0.75rem; margin-left: 0.5rem;"
+                                id="balance-btn-${wallet.address}">
+                            bal
+                        </button>
+                    </div>
+                </td>
                 <td>${wallet.tags ? wallet.tags.join(', ') : '-'}</td>
                 <td><span class="status-badge ${wallet.is_active ? 'active' : 'inactive'}">${wallet.is_active ? 'Active' : 'Inactive'}</span></td>
                 <td>
@@ -49,17 +150,65 @@ fetch('http://localhost:3001/api/wallets')
         });
     })
     .catch(err => {
-        document.getElementById('wallets-list').innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--pico-del-color);">Failed to load wallets</td></tr>';
+        document.getElementById('wallets-list').innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--pico-del-color);">Failed to load wallets</td></tr>';
     });
+
+// Fetch SOL price on load
+fetchSolPrice();
 
 // Toggle wallet function
 function toggleWallet(address) {
-    fetch(`http://localhost:3001/api/wallets/${address}/toggle`, { method: 'POST' })
+    fetch(`${window.CONFIG.API_URL}/api/wallets/${address}/toggle`, { 
+        method: 'POST',
+        headers: {
+            'X-API-Key': window.CONFIG.API_KEY
+        }
+    })
         .then(r => r.json())
         .then(() => {
             htmx.trigger('#wallets-table', 'refresh');
             showToast('Wallet status updated', 'success');
         })
         .catch(() => showToast('Failed to update wallet', 'error'));
+}
+
+// Update balance function
+function updateBalance(address) {
+    const btn = document.getElementById(`balance-btn-${address}`);
+    const balanceSpan = document.getElementById(`balance-${address}`);
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = '...';
+    
+    fetch(`${window.CONFIG.API_URL}/api/wallets/${address}/balance`, { 
+        method: 'POST',
+        headers: {
+            'X-API-Key': window.CONFIG.API_KEY
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.balance !== undefined) {
+            // Update wallet data
+            if (window.walletsData[address]) {
+                window.walletsData[address].sol_balance = data.balance;
+            }
+            
+            balanceSpan.textContent = formatBalance(data.balance, window.displayCurrency);
+            balanceSpan.title = 'Just updated';
+            
+            // Show toast with current currency
+            const displayValue = window.displayCurrency === 'USD' && window.solPrice 
+                ? `$${(data.balance * window.solPrice).toFixed(2)}` 
+                : `${formatBalance(data.balance)} SOL`;
+            showToast(`Balance updated: ${displayValue}`, 'success');
+        }
+    })
+    .catch(() => showToast('Failed to update balance', 'error'))
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = 'bal';
+    });
 }
 </script>
