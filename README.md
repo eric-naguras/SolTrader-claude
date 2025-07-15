@@ -201,4 +201,18 @@ The original monorepo structure has been simplified:
   
 
   claude mcp add context7 -- npx -y @upstash/context7-mcp
-  claude mcp add supabase -- npx -y @supabase/mcp-server-supabase@latest --access-token sbp_b430d17412fe0b83d9ddd1963f6bada61ce46cad                                                              │[💾 TRANSACTION] 17:21:56 - Processing UNKNOWN transaction: 4a61T7ua...
+  claude mcp add supabase -- npx -y @supabase/mcp-server-supabase@latest --access-token sbp_b430d17412fe0b83d9ddd1963f6bada61ce46cad
+  claude mcp add neon -- npx -y mcp-remote@latest https://mcp.neon.tech/sse
+
+
+repair prompt
+
+Examine the backend code. also read the prd and the architecture and other docs to understand the goal of this program. Then fix the issue with the whale-watcher service. It is correctly getting transactions from the helius rpc server. But it cannot seem to get the correct coin names. I am also not sure if it gets the right coin addresses. When it logs a transaction I see a lot of time the SOL base currency named: So11111111111111111111111111111111111111112 While this might be correct, a swap is initiated from SOL to a different coin and when the position is closed the swap is from the other coin back to SOL, I only and always want the other coin to be listed in the logs and also in the whale_trades table. Think hardest because we are already trying to get this right for a whole day. Use context7 to get the latests helius and supabase docs. You can execute Supabase commands using the supabase mci server.
+
+it seems like the correct coin address is displayed now in the service logs and in the frontend. But I want to see the coin name. for every transaction in the whale watcher service query the tokens table by coin address. You may need to alter the table so that the coin address is unique. if the query does not return a name, get the name from solscan. I added an api key to the .env file. Insert the coin address and name into the tokens table. But before you start empty the current tokens table as it is full with null values. alter the table so the symbol and name cannot be null.
+
+claude
+psql 'postgresql://neondb_owner:npg_aVGRyTA69KnJ@ep-falling-firefly-a1m7md7i-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+
+kiki=k2
+psql 'postgresql://neondb_owner:npg_aVGRyTA69KnJ@ep-dry-star-a1n5wnyd-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
