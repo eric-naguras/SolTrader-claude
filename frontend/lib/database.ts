@@ -42,15 +42,17 @@ export interface WhaleTrade {
   token_amount?: number;
   transaction_hash: string;
   trade_timestamp: string;
-  // Relations
-  tokens?: {
-    symbol?: string;
-    name?: string;
-  };
-  tracked_wallets?: {
-    alias?: string;
-    ui_color?: string;
-  };
+  price_usd?: number;
+  // Flattened fields from view
+  wallet_alias?: string;
+  wallet_color?: string;
+  twitter_handle?: string;
+  telegram_channel?: string;
+  streaming_channel?: string;
+  image_data?: string;
+  is_verified?: boolean;
+  token_symbol?: string;
+  token_name?: string;
 }
 
 export async function getActiveSignals(): Promise<TradeSignal[]> {
@@ -75,22 +77,11 @@ export async function getActiveSignals(): Promise<TradeSignal[]> {
   return data || [];
 }
 
-export async function getRecentTrades(): Promise<WhaleTrade[]> {
+export async function getRecentTrades(limit: number = 20): Promise<WhaleTrade[]> {
   const { data, error } = await supabase
-    .from('whale_trades')
-    .select(`
-      *,
-      tokens (
-        symbol,
-        name
-      ),
-      tracked_wallets (
-        alias,
-        ui_color
-      )
-    `)
-    .order('trade_timestamp', { ascending: false })
-    .limit(20);
+    .from('recent_whale_trades')
+    .select('*')
+    .limit(limit);
 
   if (error) {
     console.error('Error fetching recent trades:', error);

@@ -30,7 +30,17 @@
       "Bash(grep:*)",
       "Bash(timeout 35 npx tsx test-websocket.ts)",
       "Bash(timeout 20 npx tsx debug-whale-watcher.ts)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "Bash(env)",
+      "Bash(cp:*)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__get_project",
+      "mcp__supabase__search_docs",
+      "mcp__supabase__apply_migration"
     ],
     "deny": []
   }

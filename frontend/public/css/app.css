@@ -1,5 +1,20 @@
 /* Custom styles for Sonar Platform */
 
+/* Responsive layout */
+@media (min-width: 1600px) {
+    main.container-fluid {
+        max-width: 95%;
+        margin: 0 auto;
+    }
+}
+
+@media (min-width: 2560px) {
+    main.container-fluid {
+        max-width: 100%;
+        padding: 1rem 2rem;
+    }
+}
+
 /* Navigation active state */
 .nav-link[aria-current="page"] {
     text-decoration: underline;
@@ -57,21 +72,267 @@
     color: var(--pico-del-color);
 }
 
-/* Real-time feed */
-.feed-item {
+/* Keyframes for card animations */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes cardUpdate {
+    from {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    to {
+        transform: scale(1);
+    }
+}
+
+/* Wallet trades grid - multiple rows with scrolling */
+.wallet-trades-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    grid-auto-rows: max-content;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    width: 100%;
+    min-height: min-content;
+}
+
+@media (min-width: 1200px) {
+    .wallet-trades-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+}
+
+@media (min-width: 1600px) {
+    .wallet-trades-grid {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    }
+}
+
+/* 4K screens */
+@media (min-width: 3840px) {
+    .wallet-trades-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+    
+    /* Use full width on 4K */
+    body > main {
+        max-width: 100%;
+        padding: 1rem 2rem;
+    }
+    
+    /* Dashboard grid adjustments for 4K */
+    .grid {
+        gap: 2rem;
+    }
+}
+
+/* Wallet trade card */
+.wallet-trade-card {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 0.5rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateZ(0); /* Force hardware acceleration */
+    padding: 0.5rem 0.75rem;
     animation: slideIn 0.3s ease-out;
-    margin-bottom: 1rem;
+    font-size: 0.813rem;
+}
+
+.wallet-trade-card.updated {
+    animation: cardUpdate 0.5s ease-out;
+}
+
+.wallet-trade-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Wallet header */
+.wallet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.wallet-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.wallet-dot {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.wallet-avatar {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+
+.wallet-name {
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.verified-badge {
+    color: #3b82f6;
+    font-size: 0.75rem;
+}
+
+.wallet-address {
+    color: #6b7280;
+    font-size: 0.75rem;
+    font-family: monospace;
+}
+
+/* Wallet socials */
+.wallet-socials {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.wallet-socials a {
+    text-decoration: none;
+    font-size: 1rem;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.wallet-socials a:hover {
+    opacity: 1;
+}
+
+.wallet-socials .social-icon {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+/* Trades list */
+.trades-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+/* Trades list scrollbar */
+.trades-list::-webkit-scrollbar {
+    width: 0.25rem;
+}
+
+.trades-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.trades-list::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border-radius: 0.125rem;
+}
+
+.trade-row {
+    display: grid;
+    grid-template-columns: 2rem 4rem 1fr 2.5rem;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.125rem 0;
+}
+
+.trade-type {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.trade-type.buy {
+    color: #10b981;
+}
+
+.trade-type.sell {
+    color: #ef4444;
+}
+
+.trade-amount {
+    color: #d1d5db;
+    font-size: 0.813rem;
+    text-align: right;
+}
+
+.trade-token {
+    color: #9ca3af;
+    font-size: 0.813rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trade-price {
+    color: #6b7280;
+    font-size: 0.75rem;
+    text-align: right;
+}
+
+.trade-time {
+    color: #6b7280;
+    font-size: 0.75rem;
+    text-align: right;
 }
 
 @keyframes slideIn {
     from {
         opacity: 0;
-        transform: translateX(-1rem);
+        transform: translateY(-0.5rem);
     }
     to {
         opacity: 1;
-        transform: translateX(0);
+        transform: translateY(0);
     }
+}
+
+/* Scrollbar styling for trades container */
+#trades-container::-webkit-scrollbar,
+.wallet-trades-grid::-webkit-scrollbar {
+    width: 0.5rem;
+}
+
+#trades-container::-webkit-scrollbar-track,
+.wallet-trades-grid::-webkit-scrollbar-track {
+    background: var(--pico-background-color);
+}
+
+#trades-container::-webkit-scrollbar-thumb,
+.wallet-trades-grid::-webkit-scrollbar-thumb {
+    background: var(--pico-muted-border-color);
+    border-radius: 0.25rem;
+}
+
+#trades-container::-webkit-scrollbar-thumb:hover,
+.wallet-trades-grid::-webkit-scrollbar-thumb:hover {
+    background: var(--pico-muted-color);
 }
 
 /* Wallet colors */

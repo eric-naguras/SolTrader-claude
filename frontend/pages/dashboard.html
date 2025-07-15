@@ -21,27 +21,25 @@
         </article>
     </div>
 
-    <div class="grid">
-        <!-- Recent Trades -->
-        <div>
-            <h2>Recent Whale Trades</h2>
-            <div id="trade-feed" class="feed">
-                <div hx-get="/htmx/partials/recent-trades" hx-trigger="load">
-                    <article aria-busy="true">Loading trades...</article>
-                </div>
+    <!-- Recent Trades -->
+    <section>
+        <h2>Recent Whale Trades</h2>
+        <div id="trade-feed" class="feed">
+            <div hx-get="/htmx/partials/recent-trades" hx-trigger="load">
+                <article aria-busy="true">Loading trades...</article>
             </div>
         </div>
+    </section>
 
-        <!-- Active Signals -->
-        <div>
-            <h2>Active Signals</h2>
-            <div id="signals-list">
-                <div hx-get="/htmx/partials/active-signals" hx-trigger="load">
-                    <article aria-busy="true">Loading signals...</article>
-                </div>
+    <!-- Active Signals -->
+    <section>
+        <h2>Active Signals</h2>
+        <div id="signals-list">
+            <div hx-get="/htmx/partials/active-signals" hx-trigger="load">
+                <article aria-busy="true">Loading signals...</article>
             </div>
         </div>
-    </div>
+    </section>
 
     <!-- Open Positions -->
     <section>

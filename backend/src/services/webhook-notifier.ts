@@ -10,9 +10,8 @@ interface NotificationChannels {
   };
 }
 
-export class NotifierService {
+export class WebhookNotifierService {
   private channels: NotificationChannels = {};
-  private signalSubscription: any = null;
 
   constructor() {
     this.initializeChannels();
@@ -32,7 +31,7 @@ export class NotifierService {
           });
         }
       };
-      console.log('[Notifier] Telegram channel initialized');
+      console.log('[WebhookNotifier] Telegram channel initialized');
     }
 
     // Initialize Discord if configured
@@ -46,42 +45,16 @@ export class NotifierService {
           });
         }
       };
-      console.log('[Notifier] Discord channel initialized');
+      console.log('[WebhookNotifier] Discord channel initialized');
     }
 
-    // CLI notifications always available
-    console.log('[Notifier] CLI channel active');
+    console.log('[WebhookNotifier] CLI channel active');
   }
 
-  async start() {
-    console.log('[Notifier] Starting service...');
-
-    // Subscribe to new trade signals
-    this.signalSubscription = supabase
-      .channel('trade_signals')
-      .on('postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'trade_signals' 
-        },
-        async (payload) => {
-          await this.handleNewSignal(payload.new as TradeSignal);
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[Notifier] Subscribed to trade signals');
-        }
-      });
-
-    // Update heartbeat
-    setInterval(() => this.updateHeartbeat(), 30000);
-  }
-
-  private async handleNewSignal(signal: TradeSignal) {
+  // Process webhook signal data
+  async processSignalWebhook(signal: TradeSignal) {
     try {
-      console.log('[Notifier] New signal received:', signal.coin_address);
+      console.log('[WebhookNotifier] Processing signal webhook:', signal.coin_address);
 
       // Get signal details with whale information
       const { data: signalDetails } = await supabase
@@ -96,7 +69,10 @@ export class NotifierService {
         .eq('id', signal.id)
         .single();
 
-      if (!signalDetails) return;
+      if (!signalDetails) {
+        console.log('[WebhookNotifier] Signal details not found');
+        return;
+      }
 
       // Get the whale trades that triggered this signal
       const { data: whaleTrades } = await supabase
@@ -126,7 +102,7 @@ export class NotifierService {
       await this.broadcast(message);
 
     } catch (error) {
-      console.error('[Notifier] Error handling signal:', error);
+      console.error('[WebhookNotifier] Error processing signal webhook:', error);
     }
   }
 
@@ -170,7 +146,7 @@ export class NotifierService {
           message
         );
       } catch (error) {
-        console.error('[Notifier] Telegram send failed:', error);
+        console.error('[WebhookNotifier] Telegram send failed:', error);
       }
     }
 
@@ -179,42 +155,18 @@ export class NotifierService {
       try {
         await this.channels.discord.sendMessage(message);
       } catch (error) {
-        console.error('[Notifier] Discord send failed:', error);
+        console.error('[WebhookNotifier] Discord send failed:', error);
       }
     }
   }
 
-  private async updateHeartbeat() {
-    try {
-      const { error } = await supabase
-        .from('service_heartbeats')
-        .upsert({
-          service_name: 'notifier',
-          last_heartbeat: new Date().toISOString(),
-          status: 'healthy',
-          metadata: {
-            channels: Object.keys(this.channels).filter(k => k !== 'cli')
-          }
-        }, {
-          onConflict: 'service_name'
-        });
-
-      if (error) {
-        // Only log if it's not a missing table error
-        if (!error.message?.includes('relation') && !error.message?.includes('does not exist')) {
-          console.error('[Notifier] Error updating heartbeat:', error);
-        }
-      }
-    } catch (error) {
-      // Silently ignore heartbeat errors to prevent service crashes
-      console.debug('[Notifier] Heartbeat update skipped:', error);
-    }
-  }
-
-  async stop() {
-    console.log('[Notifier] Stopping service...');
-    if (this.signalSubscription) {
-      await supabase.removeChannel(this.signalSubscription);
-    }
+  // Health check endpoint data
+  getStatus() {
+    return {
+      service: 'webhook-notifier',
+      channels: Object.keys(this.channels),
+      status: 'healthy',
+      timestamp: new Date().toISOString()
+    };
   }
 }

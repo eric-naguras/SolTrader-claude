@@ -5,11 +5,13 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getActiveSignals, getRecentTrades, getStats } from './lib/database.js';
+import { WebhookNotifierService } from '../backend/src/services/webhook-notifier.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = new Hono();
+const webhookNotifier = new WebhookNotifierService();
 
 // Serve static files
 app.use('/css/*', serveStatic({ root: './public' }));
@@ -76,7 +78,8 @@ app.get('/api/signals', async (c) => {
 });
 
 app.get('/api/trades', async (c) => {
-  const trades = await getRecentTrades();
+  const limit = Number(c.req.query('limit')) || 20;
+  const trades = await getRecentTrades(limit);
   return c.json(trades);
 });
 
@@ -96,10 +99,55 @@ app.get('/htmx/partials/:partial', async (c) => {
   }
 });
 
+// Health check endpoint
+app.get('/health', async (c) => {
+  return c.json(webhookNotifier.getStatus());
+});
+
+// Webhook endpoint for Supabase database changes
+app.post('/webhooks/db-changes', async (c) => {
+  try {
+    const payload = await c.req.json();
+    
+    console.log('[Webhook] Database change received:', {
+      table: payload.table,
+      type: payload.type,
+      record: payload.record
+    });
+
+    // Handle trade_signals inserts
+    if (payload.table === 'trade_signals' && payload.type === 'INSERT') {
+      await handleNewSignalWebhook(payload.record);
+    }
+
+    // Handle whale_trades inserts  
+    if (payload.table === 'whale_trades' && payload.type === 'INSERT') {
+      await handleNewTradeWebhook(payload.record);
+    }
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[Webhook] Error processing database change:', error);
+    return c.json({ error: 'Processing failed' }, 500);
+  }
+});
+
+// Signal webhook handler
+async function handleNewSignalWebhook(signal: any) {
+  console.log('[Webhook] New signal detected:', signal.coin_address);
+  await webhookNotifier.processSignalWebhook(signal);
+}
+
+// Trade webhook handler  
+async function handleNewTradeWebhook(trade: any) {
+  console.log('[Webhook] New whale trade:', trade.wallet_address, trade.coin_address);
+}
+
 // Start server
 if (import.meta.url === `file://${process.argv[1]}`) {
   const port = Number(process.env.PORT) || 3000;
   console.log(`Frontend server is running on port ${port}`);
+  console.log(`Webhook endpoint: http://localhost:${port}/webhooks/db-changes`);
   serve({
     fetch: app.fetch,
     port,

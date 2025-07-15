@@ -78,6 +78,11 @@ SELECT
     wt.*,
     tw.alias as wallet_alias,
     tw.ui_color as wallet_color,
+    tw.twitter_handle,
+    tw.telegram_channel,
+    tw.streaming_channel,
+    tw.image_data,
+    tw.is_verified,
     t.symbol as token_symbol,
     t.name as token_name
 FROM whale_trades wt

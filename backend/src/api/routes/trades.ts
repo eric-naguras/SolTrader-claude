@@ -3,6 +3,22 @@ import { supabase } from '../../lib/supabase.js';
 
 export const tradeRoutes = new Hono();
 
+// Get recent whale trades
+tradeRoutes.get('/', async (c) => {
+  const limit = Number(c.req.query('limit')) || 20;
+  
+  const { data, error } = await supabase
+    .from('recent_whale_trades')
+    .select('*')
+    .limit(limit);
+
+  if (error) {
+    return c.json({ error: error.message }, 500);
+  }
+
+  return c.json(data || []);
+});
+
 // Get active positions
 tradeRoutes.get('/positions', async (c) => {
   const { data, error } = await supabase

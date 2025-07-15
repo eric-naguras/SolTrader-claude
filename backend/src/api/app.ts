@@ -13,8 +13,10 @@ config({ path: join(__dirname, '../../.env') });
 
 import { walletRoutes } from './routes/wallets.js';
 import { tradeRoutes } from './routes/trades.js';
+import { tokenRoutes } from './routes/tokens.js';
 import { healthRoutes } from './routes/health.js';
 import { settingsRoutes } from './routes/settings.js';
+import { supabase } from '../lib/supabase.js';
 
 const app = new Hono();
 
@@ -47,6 +49,7 @@ app.use('/api/*', authenticateApiKey);
 // Routes
 app.route('/api/wallets', walletRoutes);
 app.route('/api/trades', tradeRoutes);
+app.route('/api/tokens', tokenRoutes);
 app.route('/api/health', healthRoutes);
 app.route('/api/settings', settingsRoutes);
 
@@ -66,6 +69,34 @@ app.get('/api/events', async (c) => {
         // Send initial connection message
         controller.enqueue(new TextEncoder().encode('data: {"type":"connected"}\n\n'));
         
+        // Subscribe to new whale trades
+        const channel = supabase
+          .channel('whale_trades_realtime')
+          .on('postgres_changes', 
+            { 
+              event: 'INSERT', 
+              schema: 'public', 
+              table: 'whale_trades' 
+            },
+            async (payload) => {
+              // Get full trade data from view
+              const { data: trade } = await supabase
+                .from('recent_whale_trades')
+                .select('*')
+                .eq('id', payload.new.id)
+                .single();
+              
+              if (trade) {
+                const message = JSON.stringify({
+                  type: 'new_trade',
+                  trade
+                });
+                controller.enqueue(new TextEncoder().encode(`data: ${message}\n\n`));
+              }
+            }
+          )
+          .subscribe();
+        
         // Keep connection alive
         const interval = setInterval(() => {
           controller.enqueue(new TextEncoder().encode('data: {"type":"ping"}\n\n'));
@@ -74,6 +105,7 @@ app.get('/api/events', async (c) => {
         // Cleanup on abort
         c.req.raw.signal.addEventListener('abort', () => {
           clearInterval(interval);
+          channel.unsubscribe();
           controller.close();
         });
       }
@@ -89,6 +121,7 @@ app.get('/', (c) => {
     endpoints: [
       '/api/wallets',
       '/api/trades',
+      '/api/tokens',
       '/api/health',
       '/api/events'
     ]

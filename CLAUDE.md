@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Use context7 to search for documentation on Supabase, Helius, Solana and everything that you have trouble with getting things to work. Read more docs!
+
+Use the Supabase mcp server to get info on tables, views, functions, etc. You may also update table schemas if needed.
+
 ## Project Overview
 
 This is the Sonar Platform - a whale wallet intelligence system for Solana that monitors high-net-worth wallet activity to identify early memecoin investment opportunities. The system detects coordinated buying patterns and generates trading signals.

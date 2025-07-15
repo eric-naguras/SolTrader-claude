@@ -1,5 +1,6 @@
 import { Helius } from 'helius-sdk';
 import { supabase, type TrackedWallet, type WhaleTrade } from '../lib/supabase.js';
+import { tokenMetadataService } from './token-metadata.js';
 import WebSocket from 'ws';
 
 interface ParsedSwap {
@@ -175,8 +176,7 @@ export class WhaleWatcher {
           if (message.method === 'accountNotification' && message.params) {
             // For account subscriptions, we need to fetch transactions differently
             console.log('[WhaleWatcher] Account notification received for subscription:', message.params.subscription);
-            // We'll need to fetch recent transactions for this account
-            await this.checkAccountTransactions(message.params);
+            // TODO: Implement transaction fetching for account updates
           }
         } catch (error) {
           console.error('[WhaleWatcher] Error processing message:', error);
@@ -230,19 +230,38 @@ export class WhaleWatcher {
         const wallet = this.trackedWallets.get(swap.source);
         if (!wallet) continue;
 
-        // Determine if this is a buy or sell
-        const isBuy = swap.destination !== 'So11111111111111111111111111111111111112' && // Not selling to SOL
-                     swap.source !== swap.tokenAddress; // Source is not the token itself
+        // For sells, the token being sold is the one that's NOT SOL
+        // For buys, the token being bought is the one that's NOT SOL
+        let tokenAddress: string;
+        let isBuy: boolean;
+        
+        if (swap.source === 'So11111111111111111111111111111111111112') {
+          // SOL is source, so this is a BUY (buying the destination token with SOL)
+          tokenAddress = swap.destination;
+          isBuy = true;
+        } else if (swap.destination === 'So11111111111111111111111111111111111112') {
+          // SOL is destination, so this is a SELL (selling the source token for SOL)
+          tokenAddress = swap.source;
+          isBuy = false;
+        } else {
+          // Neither is SOL, this might be a token-to-token swap
+          // For now, skip these or treat as the non-SOL token
+          tokenAddress = swap.tokenAddress || swap.destination;
+          isBuy = swap.destination !== 'So11111111111111111111111111111111111112';
+        }
 
-        if (!swap.tokenAddress) continue;
+        if (!tokenAddress || tokenAddress === 'So11111111111111111111111111111111111112') {
+          console.log(`[WhaleWatcher] Skipping trade with invalid token address: ${tokenAddress}`);
+          continue;
+        }
 
         // Ensure token exists in database
-        await this.ensureTokenExists(swap.tokenAddress);
+        await this.ensureTokenExists(tokenAddress);
 
         // Insert whale trade
         const trade: Partial<WhaleTrade> = {
           wallet_address: wallet.address,
-          coin_address: swap.tokenAddress,
+          coin_address: tokenAddress,
           trade_type: isBuy ? 'BUY' : 'SELL',
           sol_amount: swap.amount / 1e9, // Convert lamports to SOL
           transaction_hash: signature,
@@ -291,17 +310,53 @@ export class WhaleWatcher {
   }
 
   private async ensureTokenExists(address: string) {
-    const { error } = await supabase
-      .from('tokens')
-      .upsert({
-        address,
-        last_seen: new Date().toISOString()
-      }, {
-        onConflict: 'address'
-      });
+    try {
+      // First check if token already exists with complete metadata
+      const { data: existingToken } = await supabase
+        .from('tokens')
+        .select('address, symbol, name')
+        .eq('address', address)
+        .single();
 
-    if (error) {
-      console.error('[WhaleWatcher] Error upserting token:', error);
+      if (existingToken && existingToken.symbol && existingToken.name) {
+        // Token already exists with metadata, just update last_seen
+        await supabase
+          .from('tokens')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('address', address);
+        return;
+      }
+
+      // Use the new token metadata service to fetch metadata
+      const metadata = await tokenMetadataService.getTokenMetadata(address);
+      
+      const tokenData: any = {
+        address,
+        last_seen: new Date().toISOString(),
+        symbol: metadata?.symbol || null,
+        name: metadata?.name || null,
+        metadata: metadata ? {
+          logoURI: metadata.logoURI,
+          decimals: metadata.decimals
+        } : null
+      };
+
+      // Upsert token with metadata
+      const { error } = await supabase
+        .from('tokens')
+        .upsert(tokenData, {
+          onConflict: 'address'
+        });
+
+      if (error) {
+        console.error('[WhaleWatcher] Error upserting token:', error);
+      } else if (metadata?.symbol) {
+        console.log(`[WhaleWatcher] ✓ Stored token metadata: ${metadata.symbol} - ${metadata.name}`);
+      } else {
+        console.log(`[WhaleWatcher] ⚠ Stored token without metadata: ${address.slice(0, 8)}...`);
+      }
+    } catch (error) {
+      console.error('[WhaleWatcher] Error in ensureTokenExists:', error);
     }
   }
 

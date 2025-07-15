@@ -23,7 +23,11 @@
 
 <script>
 // Fetch open positions
-fetch('http://localhost:3001/api/trades/positions')
+fetch('http://localhost:3001/api/trades/positions', {
+    headers: {
+        'X-API-Key': window.CONFIG.API_KEY
+    }
+})
     .then(r => r.json())
     .then(data => {
         const tbody = document.getElementById('positions-list');
@@ -72,7 +76,10 @@ async function closePosition(id) {
     try {
         const response = await fetch(`http://localhost:3001/api/trades/${id}/close`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-API-Key': window.CONFIG.API_KEY
+            },
             body: JSON.stringify({ exitReason: 'Manual close via UI' })
         });
         
