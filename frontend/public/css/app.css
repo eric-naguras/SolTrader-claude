@@ -506,3 +506,88 @@ dialog article {
     margin: 0 auto;
     border-radius: 0.25rem;
 }
+
+/* Form validation styles */
+.validation-error {
+    border-color: var(--pico-del-color) !important;
+    background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+.error-text {
+    color: var(--pico-del-color);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+.validation-success {
+    border-color: var(--pico-ins-color) !important;
+    background-color: rgba(16, 185, 129, 0.1) !important;
+}
+
+.success-text {
+    color: var(--pico-ins-color);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+/* Disabled button styles */
+button.disabled,
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Real-time validation feedback */
+input:focus.validation-error {
+    box-shadow: 0 0 0 0.125rem rgba(239, 68, 68, 0.25);
+}
+
+input:focus.validation-success {
+    box-shadow: 0 0 0 0.125rem rgba(16, 185, 129, 0.25);
+}
+
+/* Settings messages */
+.success-message {
+    color: var(--pico-ins-color);
+    margin-top: 1rem;
+    font-size: 0.875rem;
+}
+
+.info-message {
+    color: var(--pico-muted-color);
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.error-message {
+    color: var(--pico-del-color);
+    margin-top: 1rem;
+    font-size: 0.875rem;
+}
+
+/* Loading indicator for async validation */
+.validating {
+    position: relative;
+}
+
+.validating::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--pico-muted-color);
+    border-top: 2px solid var(--pico-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: translateY(-50%) rotate(0deg); }
+    100% { transform: translateY(-50%) rotate(360deg); }
+}

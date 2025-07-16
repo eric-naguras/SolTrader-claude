@@ -30,7 +30,9 @@ walletRoutes.post('/', async (c) => {
     telegram_channel,
     streaming_channel,
     image_data,
-    notes
+    notes,
+    sol_balance,
+    last_balance_check
   } = body;
 
   // Validate Solana address
@@ -57,6 +59,8 @@ walletRoutes.post('/', async (c) => {
       streaming_channel,
       image_data,
       notes,
+      sol_balance,
+      last_balance_check,
       is_active: true
     })
     .select()
@@ -141,19 +145,20 @@ walletRoutes.delete('/:address', async (c) => {
   return c.json({ success: true });
 });
 
-// Update wallet balance
+// Update wallet balance using SolanaFM API
 walletRoutes.post('/:address/balance', async (c) => {
   const address = c.req.param('address');
 
   try {
-    // Create connection to Solana RPC
-    const rpcUrl = process.env.HELIUS_API_KEY 
-      ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
-      : 'https://api.mainnet-beta.solana.com';
-    
-    const connection = new Connection(rpcUrl, 'confirmed');
-    
-    // Get balance
+    // Validate Solana address
+    try {
+      new PublicKey(address);
+    } catch (e) {
+      return c.json({ error: 'Invalid Solana address' }, 400);
+    }
+
+    // Fetch balance directly from RPC - simpler and more reliable
+    const connection = new Connection(process.env.HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com', 'confirmed');
     const pubkey = new PublicKey(address);
     const balance = await connection.getBalance(pubkey);
     const solBalance = balance / 1e9; // Convert lamports to SOL
@@ -185,6 +190,95 @@ walletRoutes.post('/:address/balance', async (c) => {
     console.error('Error fetching balance:', error);
     return c.json({ 
       error: 'Failed to fetch balance',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+// Bulk balance update endpoint for efficient frontend updates
+walletRoutes.post('/bulk-balance', async (c) => {
+  const body = await c.req.json();
+  const { addresses } = body;
+
+  if (!addresses || !Array.isArray(addresses)) {
+    return c.json({ error: 'addresses array is required' }, 400);
+  }
+
+  if (addresses.length === 0) {
+    return c.json({ balances: [] });
+  }
+
+  if (addresses.length > 50) {
+    return c.json({ error: 'Maximum 50 addresses allowed per request' }, 400);
+  }
+
+  try {
+    const results = [];
+    const errors = [];
+
+    // Process addresses in batches to respect API limits
+    for (let i = 0; i < addresses.length; i++) {
+      const address = addresses[i];
+      
+      try {
+        // Validate Solana address
+        new PublicKey(address);
+        
+        // Add delay between requests to respect rate limits
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+        }
+
+        // Fetch balance directly from RPC - simpler and more reliable
+        const connection = new Connection(process.env.HELIUS_RPC_URL || 'https://api.mainnet-beta.solana.com', 'confirmed');
+        const pubkey = new PublicKey(address);
+        const balance = await connection.getBalance(pubkey);
+        const solBalance = balance / 1e9; // Convert lamports to SOL
+        
+        // Update database
+        const { data, error } = await supabase
+          .from('tracked_wallets')
+          .update({ 
+            sol_balance: solBalance,
+            last_balance_check: new Date().toISOString()
+          })
+          .eq('address', address)
+          .select()
+          .single();
+
+        if (error) {
+          errors.push({ address, error: error.message });
+        } else if (data) {
+          results.push({ 
+            address, 
+            balance: solBalance,
+            wallet: data
+          });
+        } else {
+          errors.push({ address, error: 'Wallet not found' });
+        }
+
+      } catch (error) {
+        console.error(`Error fetching balance for ${address}:`, error);
+        errors.push({ 
+          address, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      }
+    }
+
+    return c.json({ 
+      balances: results,
+      errors: errors,
+      total_requested: addresses.length,
+      successful: results.length,
+      failed: errors.length
+    });
+
+  } catch (error) {
+    console.error('Error in bulk balance update:', error);
+    return c.json({ 
+      error: 'Failed to process bulk balance update',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, 500);
   }

@@ -1,5 +1,90 @@
 // Sonar Platform - Main JavaScript
 
+// Shared Wallet Cache Service - Singleton to prevent duplicate API calls
+window.WalletCache = (() => {
+    let cache = null;
+    let isLoading = false;
+    let loadPromise = null;
+    
+    return {
+        async getWallets() {
+            // Return cached data if available
+            if (cache) {
+                return cache;
+            }
+            
+            // If already loading, return the existing promise
+            if (isLoading && loadPromise) {
+                return loadPromise;
+            }
+            
+            // Start loading
+            isLoading = true;
+            loadPromise = this.loadWallets();
+            
+            try {
+                const wallets = await loadPromise;
+                cache = wallets;
+                return wallets;
+            } finally {
+                isLoading = false;
+                loadPromise = null;
+            }
+        },
+        
+        async loadWallets() {
+            const response = await fetch(`${window.CONFIG.API_URL}/api/wallets`, {
+                headers: {
+                    'X-API-Key': window.CONFIG.API_KEY
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to load wallets: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // API returns { wallets: [...] }, extract the wallets array
+            let wallets = [];
+            if (data && data.wallets && Array.isArray(data.wallets)) {
+                wallets = data.wallets;
+            } else if (Array.isArray(data)) {
+                wallets = data;
+            } else {
+                console.warn('Unexpected API response format:', data);
+                wallets = [];
+            }
+            
+            return wallets;
+        },
+        
+        // Update cache with new/modified wallet
+        updateWallet(wallet) {
+            if (cache) {
+                const index = cache.findIndex(w => w.address === wallet.address);
+                if (index >= 0) {
+                    cache[index] = wallet;
+                } else {
+                    cache.push(wallet);
+                }
+            }
+        },
+        
+        // Remove wallet from cache
+        removeWallet(address) {
+            if (cache) {
+                cache = cache.filter(w => w.address !== address);
+            }
+        },
+        
+        // Clear cache to force reload
+        clearCache() {
+            cache = null;
+        }
+    };
+})();
+
 // Configure HTMX to send API key with all requests
 document.addEventListener('DOMContentLoaded', function() {
     // Add API key to all HTMX requests
@@ -128,6 +213,11 @@ document.addEventListener('alpine:init', () => {
             is_active: true
         },
         
+        // Validation state for edit form
+        editAliasError: '',
+        editTagsError: '',
+        isEditValidating: false,
+        
         closeModal() {
             document.getElementById('edit-wallet-modal').close();
         },
@@ -178,7 +268,79 @@ document.addEventListener('alpine:init', () => {
             }
         },
         
+        // Computed property for edit form validity
+        get isEditFormValid() {
+            return this.editData.alias && 
+                   this.editData.tags && 
+                   !this.editAliasError && 
+                   !this.editTagsError;
+        },
+        
+        // Edit form validation methods
+        validateEditAlias() {
+            this.editAliasError = '';
+            
+            if (!this.editData.alias) {
+                this.editAliasError = 'Alias is required';
+                return;
+            }
+            
+            if (this.editData.alias.length < 2) {
+                this.editAliasError = 'Alias must be at least 2 characters';
+                return;
+            }
+            
+            if (this.editData.alias.length > 50) {
+                this.editAliasError = 'Alias must be less than 50 characters';
+                return;
+            }
+        },
+        
+        validateEditTags() {
+            this.editTagsError = '';
+            
+            if (!this.editData.tags) {
+                this.editTagsError = 'At least one tag is required';
+                return;
+            }
+            
+            const tagList = this.editData.tags.split(',').map(t => t.trim()).filter(t => t);
+            
+            if (tagList.length === 0) {
+                this.editTagsError = 'At least one valid tag is required';
+                return;
+            }
+            
+            // Check individual tag length
+            for (const tag of tagList) {
+                if (tag.length > 20) {
+                    this.editTagsError = 'Each tag must be less than 20 characters';
+                    return;
+                }
+            }
+            
+            if (tagList.length > 10) {
+                this.editTagsError = 'Maximum 10 tags allowed';
+                return;
+            }
+        },
+        
+        // Validate all edit fields
+        validateEditAll() {
+            this.validateEditAlias();
+            this.validateEditTags();
+        },
+        
         async updateWallet() {
+            // Final validation before submit
+            this.validateEditAll();
+            
+            if (!this.isEditFormValid) {
+                showToast('Please fix validation errors before saving', 'error');
+                return;
+            }
+            
+            this.isEditValidating = true;
             const response = await fetch(`${window.CONFIG.API_URL}/api/wallets/${this.editData.address}`, {
                 method: 'PATCH',
                 headers: { 
@@ -206,6 +368,8 @@ document.addEventListener('alpine:init', () => {
                 const error = await response.json();
                 showToast(error.error || 'Failed to update wallet', 'error');
             }
+            
+            this.isEditValidating = false;
         }
     }));
     
@@ -220,6 +384,12 @@ document.addEventListener('alpine:init', () => {
         streaming_channel: '',
         image_data: null,
         notes: '',
+        
+        // Validation state
+        addressError: '',
+        aliasError: '',
+        tagsError: '',
+        isValidating: false,
         
         async handleImageUpload(event) {
             const file = event.target.files[0];
@@ -269,7 +439,140 @@ document.addEventListener('alpine:init', () => {
             }
         },
         
+        // Computed property for form validity
+        get isFormValid() {
+            return this.address && 
+                   this.alias && 
+                   this.tags && 
+                   !this.addressError && 
+                   !this.aliasError && 
+                   !this.tagsError;
+        },
+        
+        // Initialize component
+        async init() {
+            console.log('Initializing wallet form...');
+            console.log('API URL:', window.CONFIG?.API_URL);
+            console.log('API Key present:', !!window.CONFIG?.API_KEY);
+            
+            // No need to load wallets for validation - let API handle it
+        },
+        
+        
+        // Solana address validation
+        validateAddress() {
+            this.addressError = '';
+            
+            if (!this.address) {
+                this.addressError = 'Wallet address is required';
+                return;
+            }
+            
+            // Trim whitespace
+            this.address = this.address.trim();
+            
+            // Basic Solana address format check (base58, 32-44 chars)
+            const solanaAddressRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+            if (!solanaAddressRegex.test(this.address)) {
+                this.addressError = 'Invalid Solana address format (must be 32-44 base58 characters)';
+                return;
+            }
+            
+            // Let API handle duplicate validation
+            
+            console.log('Address validation passed');
+        },
+        
+        // Alias validation
+        validateAlias() {
+            this.aliasError = '';
+            
+            if (!this.alias) {
+                this.aliasError = 'Alias is required';
+                return;
+            }
+            
+            if (this.alias.length < 2) {
+                this.aliasError = 'Alias must be at least 2 characters';
+                return;
+            }
+            
+            if (this.alias.length > 50) {
+                this.aliasError = 'Alias must be less than 50 characters';
+                return;
+            }
+        },
+        
+        // Tags validation
+        validateTags() {
+            this.tagsError = '';
+            
+            if (!this.tags) {
+                this.tagsError = 'At least one tag is required';
+                return;
+            }
+            
+            const tagList = this.tags.split(',').map(t => t.trim()).filter(t => t);
+            
+            if (tagList.length === 0) {
+                this.tagsError = 'At least one valid tag is required';
+                return;
+            }
+            
+            // Check individual tag length
+            for (const tag of tagList) {
+                if (tag.length > 20) {
+                    this.tagsError = 'Each tag must be less than 20 characters';
+                    return;
+                }
+            }
+            
+            if (tagList.length > 10) {
+                this.tagsError = 'Maximum 10 tags allowed';
+                return;
+            }
+        },
+        
+        // Validate all fields
+        validateAll() {
+            this.validateAddress();
+            this.validateAlias();
+            this.validateTags();
+        },
+        
         async submitForm() {
+            try {
+                // Final validation before submit
+                this.validateAll();
+                
+                if (!this.isFormValid) {
+                    showToast('Please fix validation errors before submitting', 'error');
+                    return;
+                }
+                
+                this.isValidating = true;
+                
+                // First, fetch the balance for the wallet
+                let balanceData = null;
+                try {
+                    const balanceResponse = await fetch(`${window.CONFIG.API_URL}/api/wallets/${this.address}/balance`, {
+                        method: 'POST',
+                        headers: {
+                            'X-API-Key': window.CONFIG.API_KEY
+                        }
+                    });
+                    
+                    if (balanceResponse.ok) {
+                        balanceData = await balanceResponse.json();
+                        console.log('Balance fetched:', balanceData);
+                    } else {
+                        console.warn('Failed to fetch balance, continuing without it');
+                    }
+                } catch (error) {
+                    console.warn('Error fetching balance:', error);
+                }
+                
+                // Now create the wallet
             const response = await fetch(`${window.CONFIG.API_URL}/api/wallets`, {
                 method: 'POST',
                 headers: { 
@@ -285,27 +588,67 @@ document.addEventListener('alpine:init', () => {
                     telegram_channel: this.telegram_channel,
                     streaming_channel: this.streaming_channel,
                     image_data: this.image_data,
-                    notes: this.notes
+                    notes: this.notes,
+                    // Include balance data if successfully fetched
+                    sol_balance: balanceData?.balance || null,
+                    last_balance_check: balanceData?.balance ? new Date().toISOString() : null
                 })
             });
             
             if (response.ok) {
+                const createdWallet = await response.json();
+                
+                // Close form and reset
                 this.showForm = false;
-                this.address = '';
-                this.alias = '';
-                this.tags = '';
-                this.twitter_handle = '';
-                this.telegram_channel = '';
-                this.streaming_channel = '';
-                this.image_data = null;
-                this.notes = '';
-                document.getElementById('image_upload').value = '';
-                htmx.trigger('#wallets-table', 'refresh');
-                showToast('Wallet added successfully', 'success');
+                this.resetForm();
+                
+                // Use the created wallet directly and update cache
+                const newWallet = createdWallet.wallet;
+                
+                // Update the shared cache with the new wallet
+                window.WalletCache.updateWallet(newWallet);
+                
+                // Add to the wallet list display
+                if (window.addNewWalletToList) {
+                    window.addNewWalletToList(newWallet);
+                } else {
+                    // Fallback to refresh if function doesn't exist
+                    htmx.trigger('#wallets-table', 'refresh');
+                }
+                
+                // Update existingWallets array for duplicate checking
+                this.existingWallets.push(newWallet.address.toLowerCase());
+                
+                // Show success message with balance if available
+                const balanceText = balanceData?.balance !== null ? ` (${balanceData.balance.toFixed(3)} SOL)` : '';
+                showToast(`Wallet added: ${newWallet.alias}${balanceText}`, 'success');
             } else {
                 const error = await response.json();
                 showToast(error.error || 'Failed to add wallet', 'error');
             }
+            
+            this.isValidating = false;
+            } catch (error) {
+                console.error('Error in submitForm:', error);
+                showToast('An error occurred while submitting the form', 'error');
+                this.isValidating = false;
+            }
+        },
+        
+        // Reset form to initial state
+        resetForm() {
+            this.address = '';
+            this.alias = '';
+            this.tags = '';
+            this.twitter_handle = '';
+            this.telegram_channel = '';
+            this.streaming_channel = '';
+            this.image_data = null;
+            this.notes = '';
+            this.addressError = '';
+            this.aliasError = '';
+            this.tagsError = '';
+            document.getElementById('image_upload').value = '';
         }
     }));
     
@@ -389,6 +732,167 @@ document.addEventListener('alpine:init', () => {
             this.updateConfig();
         }
     }));
+    
+    Alpine.data('uiRefreshConfig', () => {
+        return {
+            config: {
+                balance_interval_minutes: 5,
+                auto_refresh_enabled: true,
+                pause_on_activity: true,
+                show_refresh_indicators: true
+            },
+        
+        // Validation state
+        balanceIntervalError: '',
+        isLoading: false,
+        lastSaved: '',
+        nextBalanceRefresh: '',
+        
+        // Timer for next refresh calculation
+        nextRefreshTimer: null,
+        
+        init() {
+            this.loadConfig();
+            this.updateNextRefreshDisplay();
+        },
+        
+        loadConfig() {
+            const self = this;
+            fetch(`${window.CONFIG.API_URL}/api/settings/ui`, {
+                headers: {
+                    'X-API-Key': window.CONFIG.API_KEY
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                }
+                throw new Error('Failed to load config');
+            })
+            .then(data => {
+                self.config = data.ui_refresh_config || self.config;
+                
+                // Notify wallets table about config change
+                if (window.updateRefreshConfig) {
+                    window.updateRefreshConfig(self.config);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load UI refresh config:', error);
+            });
+        },
+        
+        get isFormValid() {
+            return this.config.balance_interval_minutes >= 1 && 
+                   this.config.balance_interval_minutes <= 60 &&
+                   !this.balanceIntervalError;
+        },
+        
+        validateBalanceInterval() {
+            this.balanceIntervalError = '';
+            
+            if (this.config.balance_interval_minutes < 1 || this.config.balance_interval_minutes > 60) {
+                this.balanceIntervalError = 'Must be between 1 and 60 minutes';
+                return;
+            }
+        },
+        
+        validateAll() {
+            this.validateBalanceInterval();
+        },
+        
+        updateConfig() {
+            this.validateAll();
+            
+            if (!this.isFormValid) {
+                showToast('Please fix validation errors before saving', 'error');
+                return;
+            }
+            
+            this.isLoading = true;
+            
+            const self = this;
+            fetch(`${window.CONFIG.API_URL}/api/settings/ui`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': window.CONFIG.API_KEY
+                },
+                body: JSON.stringify({ ui_refresh_config: this.config })
+            })
+            .then(response => {
+                if (response.ok) {
+                    self.lastSaved = new Date().toLocaleTimeString();
+                    showToast('UI refresh settings updated', 'success');
+                    
+                    // Notify wallets table about config change
+                    if (window.updateRefreshConfig) {
+                        window.updateRefreshConfig(self.config);
+                    }
+                    
+                    self.updateNextRefreshDisplay();
+                } else {
+                    return response.json().then(error => {
+                        showToast(error.error || 'Failed to update settings', 'error');
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Failed to update config:', error);
+                showToast('Failed to update settings', 'error');
+            })
+            .finally(() => {
+                self.isLoading = false;
+            });
+        },
+        
+        resetDefaults() {
+            this.config = {
+                balance_interval_minutes: 5,
+                auto_refresh_enabled: true,
+                pause_on_activity: true,
+                show_refresh_indicators: true
+            };
+            this.updateConfig();
+        },
+        
+        updateNextRefreshDisplay() {
+            if (this.nextRefreshTimer) {
+                clearInterval(this.nextRefreshTimer);
+            }
+            
+            if (!this.config.auto_refresh_enabled) {
+                this.nextBalanceRefresh = 'Auto-refresh disabled';
+                return;
+            }
+            
+            // Calculate next refresh time
+            const nextRefresh = new Date();
+            nextRefresh.setMinutes(nextRefresh.getMinutes() + this.config.balance_interval_minutes);
+            
+            const updateDisplay = () => {
+                const now = new Date();
+                const diff = nextRefresh - now;
+                
+                if (diff <= 0) {
+                    this.nextBalanceRefresh = 'Refreshing now...';
+                    return;
+                }
+                
+                const minutes = Math.floor(diff / 60000);
+                const seconds = Math.floor((diff % 60000) / 1000);
+                
+                if (minutes > 0) {
+                    this.nextBalanceRefresh = `${minutes}m ${seconds}s`;
+                } else {
+                    this.nextBalanceRefresh = `${seconds}s`;
+                }
+            };
+            
+            updateDisplay();
+            this.nextRefreshTimer = setInterval(updateDisplay, 1000);
+        }
+    }});
     
     Alpine.data('tradeManager', () => ({
         async closePosition(id) {

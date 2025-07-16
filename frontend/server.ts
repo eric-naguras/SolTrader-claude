@@ -5,13 +5,11 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getActiveSignals, getRecentTrades, getStats } from './lib/database.js';
-import { WebhookNotifierService } from '../backend/src/services/webhook-notifier.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = new Hono();
-const webhookNotifier = new WebhookNotifierService();
 
 // Serve static files
 app.use('/css/*', serveStatic({ root: './public' }));
@@ -99,10 +97,6 @@ app.get('/htmx/partials/:partial', async (c) => {
   }
 });
 
-// Health check endpoint
-app.get('/health', async (c) => {
-  return c.json(webhookNotifier.getStatus());
-});
 
 // Webhook endpoint for Supabase database changes
 app.post('/webhooks/db-changes', async (c) => {
@@ -115,15 +109,6 @@ app.post('/webhooks/db-changes', async (c) => {
       record: payload.record
     });
 
-    // Handle trade_signals inserts
-    if (payload.table === 'trade_signals' && payload.type === 'INSERT') {
-      await handleNewSignalWebhook(payload.record);
-    }
-
-    // Handle whale_trades inserts  
-    if (payload.table === 'whale_trades' && payload.type === 'INSERT') {
-      await handleNewTradeWebhook(payload.record);
-    }
 
     return c.json({ success: true });
   } catch (error) {
@@ -132,16 +117,6 @@ app.post('/webhooks/db-changes', async (c) => {
   }
 });
 
-// Signal webhook handler
-async function handleNewSignalWebhook(signal: any) {
-  console.log('[Webhook] New signal detected:', signal.coin_address);
-  await webhookNotifier.processSignalWebhook(signal);
-}
-
-// Trade webhook handler  
-async function handleNewTradeWebhook(trade: any) {
-  console.log('[Webhook] New whale trade:', trade.wallet_address, trade.coin_address);
-}
 
 // Start server
 if (import.meta.url === `file://${process.argv[1]}`) {

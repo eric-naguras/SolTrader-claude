@@ -9,24 +9,7 @@
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://unpkg.com/htmx.org/dist/ext/sse.js"></script>
     <script src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js" defer></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
     <script src="/js/config.js"></script>
-    <script>
-        // Initialize Supabase client for frontend with explicit options
-        window.supabase = supabase.createClient(
-            window.CONFIG.SUPABASE_URL,
-            window.CONFIG.SUPABASE_ANON_KEY,
-            {
-                realtime: {
-                    params: {
-                        eventsPerSecond: 10
-                    }
-                }
-            }
-        );
-        console.log('[Frontend] Supabase client initialized with URL:', window.CONFIG.SUPABASE_URL);
-        console.log('[Frontend] Realtime endpoint:', window.CONFIG.SUPABASE_URL.replace('https://', 'wss://') + '/realtime/v1/websocket');
-    </script>
 </head>
 <body>
     <nav class="container-fluid">
@@ -67,7 +50,5 @@
     </script>
 
     <script src="/js/app.js"></script>
-    <script src="/js/realtime-test.js"></script>
-    <script src="/js/test-trade-insert.js"></script>
 </body>
 </html>

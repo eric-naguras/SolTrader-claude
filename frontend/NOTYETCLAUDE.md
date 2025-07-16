@@ -8,6 +8,8 @@ Use the Supabase mcp server to get info on tables, views, functions, etc. You ma
 Use the Neon mcp server to get info on tables, views, functions, etc. You may also update table schemas if needed.
 
 ## Project Overview
+This is a frontend for a Solana trading app.
+
 
 This is the Sonar Platform - a whale wallet intelligence system for Solana that monitors high-net-worth wallet activity to identify early memecoin investment opportunities. The system detects coordinated buying patterns and generates trading signals.
 

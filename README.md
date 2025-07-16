@@ -201,4 +201,4 @@ The original monorepo structure has been simplified:
   
 
   claude mcp add context7 -- npx -y @upstash/context7-mcp
-  claude mcp add supabase -- npx -y @supabase/mcp-server-supabase@latest --access-token sbp_b430d17412fe0b83d9ddd1963f6bada61ce46cad                                                              │[💾 TRANSACTION] 17:21:56 - Processing UNKNOWN transaction: 4a61T7ua...
+  claude mcp add supabase -- npx -y @supabase/mcp-server-supabase@latest --access-token sbp_b430d17412fe0b83d9ddd1963f6bada61ce46cad

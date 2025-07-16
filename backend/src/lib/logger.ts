@@ -38,12 +38,9 @@ export interface LoggerConfig {
 export class ConfigurableLogger {
   private serviceName: string;
   private enabledCategories: number = 0;
-  private configSubscription: any = null;
-
   constructor(serviceName: string) {
     this.serviceName = serviceName;
     this.loadConfig();
-    this.subscribeToConfigChanges();
   }
 
   private async loadConfig() {
@@ -76,24 +73,12 @@ export class ConfigurableLogger {
     if (config.debug) this.enabledCategories |= LogCategory.DEBUG;
   }
 
-  private subscribeToConfigChanges() {
-    this.configSubscription = supabase
-      .channel(`config_${this.serviceName}`)
-      .on('postgres_changes', 
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'service_configs',
-          filter: `service_name=eq.${this.serviceName}`
-        },
-        (payload) => {
-          if (payload.new?.log_categories) {
-            this.updateEnabledCategories(payload.new.log_categories);
-            this.system('Logging configuration updated');
-          }
-        }
-      )
-      .subscribe();
+  // Webhook handler for configuration updates
+  handleConfigUpdate(config: any) {
+    if (config?.log_categories) {
+      this.updateEnabledCategories(config.log_categories);
+      this.system('Logging configuration updated via webhook');
+    }
   }
 
   private log(category: LogCategory, message: string | (() => string)) {
@@ -173,8 +158,6 @@ export class ConfigurableLogger {
 
   // Cleanup
   async cleanup() {
-    if (this.configSubscription) {
-      await supabase.removeChannel(this.configSubscription);
-    }
+    // No realtime subscriptions to clean up
   }
 }
