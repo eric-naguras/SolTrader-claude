@@ -1,4 +1,4 @@
-<div id="trades-container" style="height: 40vh; overflow-y: auto; overflow-x: hidden;">
+export const recentTradesPartial = () => `<div id="trades-container" style="height: 40vh; overflow-y: auto; overflow-x: hidden;">
     <div id="trades-feed" class="wallet-trades-grid">
         <!-- Wallet trade cards will be loaded from database -->
     </div>
@@ -22,7 +22,7 @@ async function loadRecentTrades() {
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
         }
         
         const trades = await response.json();
@@ -42,7 +42,7 @@ async function loadRecentTrades() {
         trades.forEach(trade => {
             const tokenSymbol = trade.token_symbol || 'Unknown';
             const tokenName = trade.token_name;
-            const walletAlias = trade.wallet_alias || `${trade.wallet_address.slice(0, 8)}...${trade.wallet_address.slice(-4)}`;
+            const walletAlias = trade.wallet_alias || \`\${trade.wallet_address.slice(0, 8)}...\${trade.wallet_address.slice(-4)}\`;
             const walletColor = trade.wallet_color || '#4338ca';
             const isVerified = trade.is_verified || false;
             const twitterHandle = trade.twitter_handle;
@@ -151,51 +151,51 @@ function getCardInnerHTML(wallet) {
         
         // If we still don't have a proper name and we have a token address, show truncated address
         if (tokenDisplay === 'Unknown' && trade.token_address && trade.token_address !== 'So11111111111111111111111111111111111111112') {
-          tokenDisplay = `${trade.token_address.slice(0, 4)}...${trade.token_address.slice(-4)}`;
+          tokenDisplay = \`\${trade.token_address.slice(0, 4)}...\${trade.token_address.slice(-4)}\`;
         }
         
         // Never show SOL for the other token in swaps
         if (tokenDisplay === 'SOL' && trade.token_address === 'So11111111111111111111111111111111111111112') {
           tokenDisplay = 'Unknown';
         }
-        return `
+        return \`
       <div class="trade-row">
-        <span class="trade-type ${typeClass}">${typeDisplay}</span>
-        <span class="trade-amount">${solAmount} Sol</span>
-        <span class="trade-token" title="${trade.token_name || trade.token_symbol || 'Unknown'}">${tokenDisplay}</span>
-        <span class="trade-time">${timeAgo}</span>
+        <span class="trade-type \${typeClass}">\${typeDisplay}</span>
+        <span class="trade-amount">\${solAmount} Sol</span>
+        <span class="trade-token" title="\${trade.token_name || trade.token_symbol || 'Unknown'}">\${tokenDisplay}</span>
+        <span class="trade-time">\${timeAgo}</span>
       </div>
-    `;
+    \`;
     }).join('');
     
     // Build social links
     let socials = [];
     if (wallet.twitterHandle)
-        socials.push(`<a href="https://twitter.com/${wallet.twitterHandle.replace('@', '')}" target="_blank" title="Twitter">🐦</a>`);
+        socials.push(\`<a href="https://twitter.com/\${wallet.twitterHandle.replace('@', '')}" target="_blank" title="Twitter">🐦</a>\`);
     if (wallet.telegramChannel)
-        socials.push(`<a href="${wallet.telegramChannel.startsWith('http') ? wallet.telegramChannel : 'https://' + wallet.telegramChannel}" target="_blank" title="Telegram">💬</a>`);
+        socials.push(\`<a href="\${wallet.telegramChannel.startsWith('http') ? wallet.telegramChannel : 'https://' + wallet.telegramChannel}" target="_blank" title="Telegram">💬</a>\`);
     if (wallet.streamingChannel)
-        socials.push(`<a href="${wallet.streamingChannel.startsWith('http') ? wallet.streamingChannel : 'https://' + wallet.streamingChannel}" target="_blank" title="Stream">📺</a>`);
-    const socialsHtml = socials.length > 0 ? `<div class="wallet-socials">${socials.join(' ')}</div>` : '';
+        socials.push(\`<a href="\${wallet.streamingChannel.startsWith('http') ? wallet.streamingChannel : 'https://' + wallet.streamingChannel}" target="_blank" title="Stream">📺</a>\`);
+    const socialsHtml = socials.length > 0 ? \`<div class="wallet-socials">\${socials.join(' ')}</div>\` : '';
     
     // Build wallet avatar - use wallet image if available, otherwise create colored circle
     const avatarHtml = wallet.walletImageData
-        ? `<img src="${wallet.walletImageData}" alt="${wallet.walletAlias}" class="wallet-avatar">`
-        : `<div class="wallet-avatar" style="background-color: ${wallet.walletColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.75rem;">${wallet.walletAlias.charAt(0).toUpperCase()}</div>`;
+        ? \`<img src="\${wallet.walletImageData}" alt="\${wallet.walletAlias}" class="wallet-avatar">\`
+        : \`<div class="wallet-avatar" style="background-color: \${wallet.walletColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.75rem;">\${wallet.walletAlias.charAt(0).toUpperCase()}</div>\`;
     
-    return `
+    return \`
     <div class="wallet-header">
       <div class="wallet-info">
-        ${avatarHtml}
-        <strong class="wallet-name">${wallet.walletAlias}</strong>
-        ${wallet.isVerified ? '<span class="verified-badge">✓</span>' : ''}
+        \${avatarHtml}
+        <strong class="wallet-name">\${wallet.walletAlias}</strong>
+        \${wallet.isVerified ? '<span class="verified-badge">✓</span>' : ''}
       </div>
-      ${socialsHtml}
+      \${socialsHtml}
     </div>
     <div class="trades-list">
-      ${tradesHTML}
+      \${tradesHTML}
     </div>
-  `;
+  \`;
 }
 
 function formatTimeAgo(timestamp) {
@@ -206,9 +206,9 @@ function formatTimeAgo(timestamp) {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
     
-    if (diffDays > 0) return `${diffDays}d`;
-    if (diffHours > 0) return `${diffHours}h`;
-    if (diffMins > 0) return `${diffMins}m`;
+    if (diffDays > 0) return \`\${diffDays}d\`;
+    if (diffHours > 0) return \`\${diffHours}h\`;
+    if (diffMins > 0) return \`\${diffMins}m\`;
     return 'now';
 }
 
@@ -220,9 +220,9 @@ function getTimeAgo(timestamp) {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
     
-    if (diffDays > 0) return `${diffDays}d ago`;
-    if (diffHours > 0) return `${diffHours}h ago`;
-    if (diffMins > 0) return `${diffMins}m ago`;
+    if (diffDays > 0) return \`\${diffDays}d ago\`;
+    if (diffHours > 0) return \`\${diffHours}h ago\`;
+    if (diffMins > 0) return \`\${diffMins}m ago\`;
     return 'just now';
 }
 
@@ -246,7 +246,7 @@ document.addEventListener('htmx:sseMessage', (event) => {
             const tokenName = trade.tokens?.name || trade.token_name || null;
             
             // Extract wallet information
-            const walletAlias = trade.tracked_wallets?.alias || trade.wallet_alias || `${trade.wallet_address.slice(0, 8)}...`;
+            const walletAlias = trade.tracked_wallets?.alias || trade.wallet_alias || \`\${trade.wallet_address.slice(0, 8)}...\`;
             const walletColor = trade.tracked_wallets?.ui_color || trade.wallet_color || '#4338ca';
             const isVerified = trade.tracked_wallets?.is_verified || trade.is_verified || false;
             const twitterHandle = trade.tracked_wallets?.twitter_handle;
@@ -310,4 +310,4 @@ document.addEventListener('htmx:sseError', (event) => {
 document.addEventListener('htmx:sseClose', () => {
     console.log('[SSE] ⚠ SSE connection closed');
 });
-</script>
+</script>`;

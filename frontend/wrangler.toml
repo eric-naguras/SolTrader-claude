@@ -1,0 +1,45 @@
+name = "sonar-frontend"
+main = "server.ts"
+compatibility_date = "2024-01-01"
+
+# Account and deployment settings
+# account_id = "your-account-id"
+# workers_dev = true
+# route = "your-domain.com/*"
+
+# Environment variables (set these in your Cloudflare dashboard or via secrets)
+[vars]
+PORT = "8787"
+
+# Secrets (use wrangler secret put VARIABLE_NAME)
+# SUPABASE_URL
+# SUPABASE_ANON_KEY
+
+# Build configuration
+[build]
+command = ""
+upload_format = "modules"
+
+# Static assets configuration
+# For production, you'll want to use Workers Sites or R2
+# [site]
+# bucket = "./public"
+
+# Or use R2 for static assets
+# [[r2_buckets]]
+# binding = "ASSETS"
+# bucket_name = "sonar-frontend-assets"
+
+# Development settings
+[dev]
+port = 8787
+local_protocol = "http"
+
+# TypeScript settings
+[build.upload]
+format = "modules"
+main = "server.ts"
+
+# Node.js compatibility
+[compatibility_flags]
+nodejs_compat = true

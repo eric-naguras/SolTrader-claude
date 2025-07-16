@@ -1,15 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
-import { config } from 'dotenv';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+// import { config } from 'dotenv';
+// import { fileURLToPath } from 'node:url';
+// import { dirname, join } from 'node:path';
+import { ENV } from './env';
+
 
 // Load environment variables
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-config({ path: join(__dirname, '../.env') });
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = dirname(__filename);
+// config({ path: join(__dirname, '../.env') });
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = ENV.SUPABASE_URL;
+const supabaseAnonKey = ENV.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');

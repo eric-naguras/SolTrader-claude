@@ -1,4 +1,4 @@
-<section>
+export const settingsPage = () => `<section>
     <h1>Settings</h1>
     
     <!-- Tab Navigation -->
@@ -101,7 +101,7 @@ function switchTab(tab) {
     document.getElementById('general-tab').style.display = 'none';
     
     // Show selected tab
-    document.getElementById(`${tab}-tab`).style.display = 'block';
+    document.getElementById(\`\${tab}-tab\`).style.display = 'block';
     
     // Update aria-selected
     document.querySelectorAll('[role="tab"]').forEach(t => {
@@ -109,4 +109,4 @@ function switchTab(tab) {
     });
     event.target.setAttribute('aria-selected', 'true');
 }
-</script>
+</script>`;

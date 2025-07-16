@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "WebWorker"],
     "moduleResolution": "node",
     "outDir": "./dist",
     "rootDir": ".",
@@ -13,8 +13,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": false,
-    "types": ["@types/node"]
+    "allowJs": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["server.ts"],
+  "include": ["server.ts", "src/**/*", "lib/**/*"],
   "exclude": ["node_modules", "dist", "public"]
 }

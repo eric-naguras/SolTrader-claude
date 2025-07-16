@@ -1,4 +1,4 @@
-<section x-data="walletForm" x-init="init()">
+export const walletsPage = () => `<section x-data="walletForm" x-init="init()">
     <h1>Tracked Wallets</h1>
     
     <!-- Add Wallet Form -->
@@ -266,4 +266,4 @@
             </form>
         </article>
     </dialog>
-</section>
+</section>`;

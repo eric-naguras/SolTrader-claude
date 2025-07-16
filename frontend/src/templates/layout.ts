@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+export const layout = (content: string) => `<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
@@ -25,10 +25,7 @@
     </nav>
 
     <main class="container-fluid" id="main-content">
-        <!-- Initial load dashboard -->
-        <div hx-get="/htmx/dashboard" hx-trigger="load" hx-swap="outerHTML">
-            <article aria-busy="true">Loading...</article>
-        </div>
+        ${content}
     </main>
 
     <!-- SSE Connection for real-time updates -->
@@ -38,7 +35,7 @@
     // Set up SSE connection with API key
     document.addEventListener('DOMContentLoaded', function() {
         const sseContainer = document.getElementById('sse-container');
-        const sseUrl = `${window.CONFIG.API_URL}/api/events?api_key=${window.CONFIG.API_KEY}`;
+        const sseUrl = \`\${window.CONFIG.API_URL}/api/events?api_key=\${window.CONFIG.API_KEY}\`;
         
         sseContainer.setAttribute('hx-ext', 'sse');
         sseContainer.setAttribute('sse-connect', sseUrl);
@@ -51,4 +48,11 @@
 
     <script src="/js/app.js"></script>
 </body>
-</html>
+</html>`;
+
+export const layoutWithInitialLoad = () => layout(`
+        <!-- Initial load dashboard -->
+        <div hx-get="/htmx/dashboard" hx-trigger="load" hx-swap="outerHTML">
+            <article aria-busy="true">Loading...</article>
+        </div>
+`);

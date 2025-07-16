@@ -1,4 +1,4 @@
-<div class="stats-grid" id="stats-container">
+export const statsPartial = () => `<div class="stats-grid" id="stats-container">
     <article class="stat-card">
         <h3 id="active-wallets">-</h3>
         <p>Active Wallets</p>
@@ -41,4 +41,4 @@ async function loadStats() {
 
 // Load stats when page loads
 loadStats();
-</script>
+</script>`;

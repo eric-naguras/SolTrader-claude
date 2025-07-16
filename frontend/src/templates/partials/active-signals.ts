@@ -1,4 +1,4 @@
-<div id="signals-container">
+export const activeSignalsPartial = () => `<div id="signals-container">
     <!-- Signals will be loaded from database -->
 </div>
 
@@ -21,22 +21,22 @@ async function loadSignals() {
             const coinAddress = signal.coin_address;
             const timeAgo = getTimeAgo(signal.created_at);
             
-            return `
+            return \`
                 <article style="border-left: 4px solid var(--pico-primary); padding-left: 1rem;">
                     <header>
-                        <strong>${tokenSymbol}</strong>
-                        <small style="float: right; color: var(--pico-muted-color);">${timeAgo}</small>
+                        <strong>\${tokenSymbol}</strong>
+                        <small style="float: right; color: var(--pico-muted-color);">\${timeAgo}</small>
                     </header>
                     <p style="margin: 0.5rem 0;">
-                        <span class="status-badge open">${signal.status}</span>
-                        <span style="margin-left: 1rem;">${signal.trigger_reason || 'Whale activity detected'}</span>
+                        <span class="status-badge open">\${signal.status}</span>
+                        <span style="margin-left: 1rem;">\${signal.trigger_reason || 'Whale activity detected'}</span>
                     </p>
                     <small>
-                        <code>${coinAddress.slice(0, 8)}...${coinAddress.slice(-4)}</code>
-                        <a href="https://dexscreener.com/solana/${coinAddress}" target="_blank" style="margin-left: 1rem;">View on DexScreener →</a>
+                        <code>\${coinAddress.slice(0, 8)}...\${coinAddress.slice(-4)}</code>
+                        <a href="https://dexscreener.com/solana/\${coinAddress}" target="_blank" style="margin-left: 1rem;">View on DexScreener →</a>
                     </small>
                 </article>
-            `;
+            \`;
         }).join('');
         
         container.innerHTML = signalsHtml;
@@ -54,9 +54,9 @@ function getTimeAgo(timestamp) {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
     
-    if (diffDays > 0) return `${diffDays}d ago`;
-    if (diffHours > 0) return `${diffHours}h ago`;
-    if (diffMins > 0) return `${diffMins}m ago`;
+    if (diffDays > 0) return \`\${diffDays}d ago\`;
+    if (diffHours > 0) return \`\${diffHours}h ago\`;
+    if (diffMins > 0) return \`\${diffMins}m ago\`;
     return 'just now';
 }
 
@@ -69,20 +69,20 @@ document.addEventListener('htmx:sseMessage', (event) => {
         const signal = event.detail.data.signal;
         const newSignal = document.createElement('article');
         newSignal.style.cssText = 'border-left: 4px solid var(--pico-primary); padding-left: 1rem;';
-        newSignal.innerHTML = `
+        newSignal.innerHTML = \`
             <header>
-                <strong>${signal.token_symbol || 'Unknown'}</strong>
+                <strong>\${signal.token_symbol || 'Unknown'}</strong>
                 <small style="float: right; color: var(--pico-muted-color);">just now</small>
             </header>
             <p style="margin: 0.5rem 0;">
                 <span class="status-badge open">OPEN</span>
-                <span style="margin-left: 1rem;">${signal.whale_count} whales bought</span>
+                <span style="margin-left: 1rem;">\${signal.whale_count} whales bought</span>
             </p>
             <small>
-                <code>${signal.coin_address}</code>
-                <a href="https://dexscreener.com/solana/${signal.coin_address}" target="_blank" style="margin-left: 1rem;">View on DexScreener →</a>
+                <code>\${signal.coin_address}</code>
+                <a href="https://dexscreener.com/solana/\${signal.coin_address}" target="_blank" style="margin-left: 1rem;">View on DexScreener →</a>
             </small>
-        `;
+        \`;
         
         const container = document.getElementById('signals-container');
         container.insertBefore(newSignal, container.firstChild);
@@ -93,4 +93,4 @@ document.addEventListener('htmx:sseMessage', (event) => {
         }
     }
 });
-</script>
+</script>`;
