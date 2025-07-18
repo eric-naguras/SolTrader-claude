@@ -2,7 +2,7 @@ export const walletsTablePartial = () => `<table>
     <thead>
         <tr>
             <th></th>
-            <th>Alias</th>
+            <th onclick="sortTable('alias')" style="cursor: pointer; user-select: none;">Alias <span id="sort-alias">↕</span></th>
             <th>Address</th>
             <th>Socials</th>
             <th onclick="sortTable('balance')" style="cursor: pointer; user-select: none;">Balance <span id="sort-balance">↕</span></th>
@@ -94,6 +94,10 @@ function sortTable(column) {
         let valueA, valueB;
         
         switch (column) {
+            case 'alias':
+                valueA = (a.alias || '').toLowerCase();
+                valueB = (b.alias || '').toLowerCase();
+                break;
             case 'balance':
                 valueA = a.sol_balance || 0;
                 valueB = b.sol_balance || 0;
