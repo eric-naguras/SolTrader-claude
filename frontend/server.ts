@@ -15,6 +15,18 @@ import { getActiveSignals, getRecentTrades, getStats, getTrackedWallets, getTrac
 
 const app = new Hono();
 
+// Determine the port to use
+let portToUse: number;
+
+if (process.env.PORT) {
+  // If PORT is explicitly set in environment variables, use that
+  portToUse = Number(process.env.PORT);
+} else {
+  // Otherwise, use port 0 to let Bun find an available port
+  // Bun will pick a random available port if 0 is specified
+  portToUse = 0;
+}
+
 // Serve static files - runtime-specific imports
 // For Bun runtime
 if (typeof Bun !== 'undefined') {
@@ -233,7 +245,7 @@ export default app;
 // Runtime-specific startup
 // For Bun and Node.js
 if (typeof Bun !== 'undefined' || (typeof process !== 'undefined' && process.versions?.node)) {
-  const port = Number(process.env.PORT) || 3000;
+  const port = Number(process.env.PORT) || portToUse;
   
   // Only start server if this file is the main module
   if (import.meta.url.endsWith(process.argv[1] || '')) {
