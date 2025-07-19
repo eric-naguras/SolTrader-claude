@@ -200,10 +200,34 @@ app.patch('/htmx/wallets/:address/toggle', async (c) => {
 // HTMX endpoints for wallets - return HTML fragments
 app.get('/htmx/partials/wallets-table', async (c) => {
   try {
-    const { sortBy, sortOrder } = c.req.query();
+    const { sortBy, sortOrder, tags } = c.req.query();
     const validSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
-    const wallets = await getTrackedWallets(sortBy, validSortOrder);
-    const tableHtml = walletsTablePartial(wallets, sortBy, validSortOrder);
+    
+    // Get all wallets to extract all available tags
+    const allWallets = await getTrackedWallets();
+    const allTags = new Set<string>();
+    allWallets.forEach(wallet => {
+      if (wallet.tags) {
+        wallet.tags.forEach(tag => allTags.add(tag));
+      }
+    });
+    
+    // Parse selected tags - if no tags parameter, default to ALL tags (show all wallets)
+    let selectedTags: string[] = [];
+    if (tags === undefined || tags === '') {
+      // No filter specified = show all wallets (all tags selected)
+      selectedTags = Array.from(allTags);
+    } else {
+      // Parse the tags parameter
+      selectedTags = tags.split(',').filter(Boolean);
+    }
+    
+    // Get filtered wallets
+    const wallets = selectedTags.length > 0 
+      ? await getTrackedWallets(sortBy, validSortOrder, selectedTags)
+      : []; // No tags selected = show no wallets
+    
+    const tableHtml = walletsTablePartial(wallets, sortBy, validSortOrder, selectedTags, Array.from(allTags).sort());
     return c.html(tableHtml);
   } catch (error) {
     console.error('Error fetching wallets for HTMX:', error);

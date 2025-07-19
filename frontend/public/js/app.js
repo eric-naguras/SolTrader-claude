@@ -790,6 +790,108 @@ document.addEventListener('alpine:init', () => {
         }
     }});
     
+    Alpine.data('tagFilter', () => ({
+        showPreview: false,
+        showFilter: false,
+        selectedTags: [],
+        allTags: [],
+        appliedTags: [], // Track what tags are currently applied
+        
+        init() {
+            // Extract all available tags from the interactive filter only (not preview)
+            const interactiveCheckboxes = this.$el.querySelectorAll('.tag-filter-popup.interactive .tag-filter-content input[type="checkbox"]');
+            this.allTags = Array.from(interactiveCheckboxes).map(cb => cb.value).filter(Boolean);
+            
+            // Initialize selected tags based on initially checked checkboxes
+            // If all are checked (or none specified), we have all selected
+            const checkedTags = Array.from(interactiveCheckboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
+            
+            // If all tags are checked or no specific selection, select all
+            if (checkedTags.length === this.allTags.length || checkedTags.length === 0) {
+                this.selectedTags = [...this.allTags];
+            } else {
+                this.selectedTags = checkedTags;
+            }
+            
+            // Initialize applied tags to match selected tags
+            this.appliedTags = [...this.selectedTags];
+        },
+        
+        toggleTag(tag) {
+            const index = this.selectedTags.indexOf(tag);
+            if (index > -1) {
+                this.selectedTags.splice(index, 1);
+            } else {
+                this.selectedTags.push(tag);
+            }
+            // Don't apply filters immediately - wait for click outside
+        },
+        
+        selectAll() {
+            this.selectedTags = [...this.allTags];
+            // Don't apply filters immediately - wait for click outside
+        },
+        
+        clearAll() {
+            this.selectedTags = [];
+            // Don't apply filters immediately - wait for click outside
+        },
+        
+        applyFilters() {
+            // Get current sort parameters from the table
+            const table = document.querySelector('#wallets-table table');
+            const urlParams = new URLSearchParams();
+            
+            // Find the current sort column and order
+            let currentSortBy = 'created_at';
+            let currentSortOrder = 'desc';
+            
+            // Look for the active sort header (has the active sort icon)
+            const activeSortHeader = table?.querySelector('th .sort-icon.active');
+            if (activeSortHeader) {
+                const th = activeSortHeader.closest('th');
+                const hxGet = th?.getAttribute('hx-get');
+                if (hxGet) {
+                    const sortParams = new URLSearchParams(hxGet.split('?')[1]);
+                    currentSortBy = sortParams.get('sortBy') || currentSortBy;
+                    // The current order is the opposite of what's in the link (since links toggle)
+                    const linkOrder = sortParams.get('sortOrder');
+                    currentSortOrder = linkOrder === 'asc' ? 'desc' : 'asc';
+                }
+            }
+            
+            // Set the current sort parameters
+            urlParams.set('sortBy', currentSortBy);
+            urlParams.set('sortOrder', currentSortOrder);
+            
+            // Add selected tags only if not all tags are selected
+            // If all tags are selected, don't send tags parameter (server will default to showing all)
+            if (this.selectedTags.length > 0 && this.selectedTags.length < this.allTags.length) {
+                urlParams.set('tags', this.selectedTags.join(','));
+            } else if (this.selectedTags.length === 0) {
+                // Explicitly set empty to show no wallets
+                urlParams.set('tags', '');
+            }
+            // If selectedTags.length === allTags.length, don't set tags parameter (show all)
+            
+            // Trigger HTMX request to reload table with filters
+            htmx.ajax('GET', `/htmx/partials/wallets-table?${urlParams.toString()}`, {
+                target: '#wallets-table',
+                swap: 'innerHTML'
+            });
+            
+            // Update applied tags to match current selection
+            this.appliedTags = [...this.selectedTags];
+        },
+        
+        cancelFilters() {
+            // Revert selected tags to last applied state
+            this.selectedTags = [...this.appliedTags];
+        }
+    })),
+    
     Alpine.data('tradeManager', () => ({
         async closePosition(id) {
             if (!confirm('Are you sure you want to close this position?')) return;

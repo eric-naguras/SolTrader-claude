@@ -20,7 +20,7 @@ export interface TrackedWallet {
   created_at: string;
 }
 
-export async function getTrackedWallets(sortBy: string = 'created_at', sortOrder: string = 'desc'): Promise<TrackedWallet[]> {
+export async function getTrackedWallets(sortBy: string = 'created_at', sortOrder: string = 'desc', filterTags: string[] = []): Promise<TrackedWallet[]> {
   try {
     // Whitelist of allowed sort columns to prevent SQL injection
     const allowedSortBy = ['alias', 'sol_balance', 'tags', 'is_active', 'created_at'];
@@ -32,8 +32,8 @@ export async function getTrackedWallets(sortBy: string = 'created_at', sortOrder
     // Dynamically construct the ORDER BY clause
     const orderByClause = `${safeSortBy} ${safeSortOrder}`;
 
-    const result = await sql.query(
-      `SELECT 
+    // Build the query based on whether we have filter tags
+    let query = `SELECT 
         id,
         address,
         alias,
@@ -48,9 +48,19 @@ export async function getTrackedWallets(sortBy: string = 'created_at', sortOrder
         last_balance_check,
         is_active,
         created_at
-      FROM tracked_wallets
-      ORDER BY ${orderByClause}`
-    );
+      FROM tracked_wallets`;
+
+    // Add WHERE clause for tag filtering if tags are provided
+    if (filterTags.length > 0) {
+      const tagConditions = filterTags.map((_, index) => `$${index + 1} = ANY(tags)`).join(' OR ');
+      query += ` WHERE ${tagConditions}`;
+    }
+
+    query += ` ORDER BY ${orderByClause}`;
+
+    const result = filterTags.length > 0 
+      ? await sql.query(query, filterTags)
+      : await sql.query(query);
     
     return result.map(row => ({
       ...row,

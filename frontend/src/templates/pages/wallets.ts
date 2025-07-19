@@ -1,5 +1,4 @@
 export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="init()">
-    <h1>Tracked Wallets</h1>
     
     <!-- Add Wallet Form -->
     <div>
