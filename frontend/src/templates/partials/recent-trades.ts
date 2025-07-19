@@ -1,4 +1,4 @@
-<div id="trades-container" style="height: 40vh; overflow-y: auto; overflow-x: hidden;">
+export const recentTradesPartial = () => `<div id="trades-container" style="height: 40vh; overflow-y: auto; overflow-x: hidden;">
     <div id="trades-feed" class="wallet-trades-grid">
         <!-- Wallet trade cards will be loaded from database -->
     </div>
@@ -22,7 +22,7 @@ async function loadRecentTrades() {
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
         }
         
         const trades = await response.json();
@@ -42,7 +42,7 @@ async function loadRecentTrades() {
         trades.forEach(trade => {
             const tokenSymbol = trade.token_symbol || 'Unknown';
             const tokenName = trade.token_name;
-            const walletAlias = trade.wallet_alias || `${trade.wallet_address.slice(0, 8)}...${trade.wallet_address.slice(-4)}`;
+            const walletAlias = trade.wallet_alias || \`\${trade.wallet_address.slice(0, 8)}...\${trade.wallet_address.slice(-4)}\`;
             const walletColor = trade.wallet_color || '#4338ca';
             const isVerified = trade.is_verified || false;
             const twitterHandle = trade.twitter_handle;
@@ -151,51 +151,51 @@ function getCardInnerHTML(wallet) {
         
         // If we still don't have a proper name and we have a token address, show truncated address
         if (tokenDisplay === 'Unknown' && trade.token_address && trade.token_address !== 'So11111111111111111111111111111111111111112') {
-          tokenDisplay = `${trade.token_address.slice(0, 4)}...${trade.token_address.slice(-4)}`;
+          tokenDisplay = \`\${trade.token_address.slice(0, 4)}...\${trade.token_address.slice(-4)}\`;
         }
         
         // Never show SOL for the other token in swaps
         if (tokenDisplay === 'SOL' && trade.token_address === 'So11111111111111111111111111111111111111112') {
           tokenDisplay = 'Unknown';
         }
-        return `
+        return \`
       <div class="trade-row">
-        <span class="trade-type ${typeClass}">${typeDisplay}</span>
-        <span class="trade-amount">${solAmount} Sol</span>
-        <span class="trade-token" title="${trade.token_name || trade.token_symbol || 'Unknown'}">${tokenDisplay}</span>
-        <span class="trade-time">${timeAgo}</span>
+        <span class="trade-type \${typeClass}">\${typeDisplay}</span>
+        <span class="trade-amount">\${solAmount} Sol</span>
+        <span class="trade-token" title="\${trade.token_name || trade.token_symbol || 'Unknown'}">\${tokenDisplay}</span>
+        <span class="trade-time">\${timeAgo}</span>
       </div>
-    `;
+    \`;
     }).join('');
     
     // Build social links
     let socials = [];
     if (wallet.twitterHandle)
-        socials.push(`<a href="https://twitter.com/${wallet.twitterHandle.replace('@', '')}" target="_blank" title="Twitter">🐦</a>`);
+        socials.push(\`<a href="https://twitter.com/\${wallet.twitterHandle.replace('@', '')}" target="_blank" title="Twitter">🐦</a>\`);
     if (wallet.telegramChannel)
-        socials.push(`<a href="${wallet.telegramChannel.startsWith('http') ? wallet.telegramChannel : 'https://' + wallet.telegramChannel}" target="_blank" title="Telegram">💬</a>`);
+        socials.push(\`<a href="\${wallet.telegramChannel.startsWith('http') ? wallet.telegramChannel : 'https://' + wallet.telegramChannel}" target="_blank" title="Telegram">💬</a>\`);
     if (wallet.streamingChannel)
-        socials.push(`<a href="${wallet.streamingChannel.startsWith('http') ? wallet.streamingChannel : 'https://' + wallet.streamingChannel}" target="_blank" title="Stream">📺</a>`);
-    const socialsHtml = socials.length > 0 ? `<div class="wallet-socials">${socials.join(' ')}</div>` : '';
+        socials.push(\`<a href="\${wallet.streamingChannel.startsWith('http') ? wallet.streamingChannel : 'https://' + wallet.streamingChannel}" target="_blank" title="Stream">📺</a>\`);
+    const socialsHtml = socials.length > 0 ? \`<div class="wallet-socials">\${socials.join(' ')}</div>\` : '';
     
     // Build wallet avatar - use wallet image if available, otherwise create colored circle
     const avatarHtml = wallet.walletImageData
-        ? `<img src="${wallet.walletImageData}" alt="${wallet.walletAlias}" class="wallet-avatar">`
-        : `<div class="wallet-avatar" style="background-color: ${wallet.walletColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.75rem;">${wallet.walletAlias.charAt(0).toUpperCase()}</div>`;
+        ? \`<img src="\${wallet.walletImageData}" alt="\${wallet.walletAlias}" class="wallet-avatar">\`
+        : \`<div class="wallet-avatar" style="background-color: \${wallet.walletColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.75rem;">\${wallet.walletAlias.charAt(0).toUpperCase()}</div>\`;
     
-    return `
+    return \`
     <div class="wallet-header">
       <div class="wallet-info">
-        ${avatarHtml}
-        <strong class="wallet-name">${wallet.walletAlias}</strong>
-        ${wallet.isVerified ? '<span class="verified-badge">✓</span>' : ''}
+        \${avatarHtml}
+        <strong class="wallet-name">\${wallet.walletAlias}</strong>
+        \${wallet.isVerified ? '<span class="verified-badge">✓</span>' : ''}
       </div>
-      ${socialsHtml}
+      \${socialsHtml}
     </div>
     <div class="trades-list">
-      ${tradesHTML}
+      \${tradesHTML}
     </div>
-  `;
+  \`;
 }
 
 function formatTimeAgo(timestamp) {
@@ -206,9 +206,9 @@ function formatTimeAgo(timestamp) {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
     
-    if (diffDays > 0) return `${diffDays}d`;
-    if (diffHours > 0) return `${diffHours}h`;
-    if (diffMins > 0) return `${diffMins}m`;
+    if (diffDays > 0) return \`\${diffDays}d\`;
+    if (diffHours > 0) return \`\${diffHours}h\`;
+    if (diffMins > 0) return \`\${diffMins}m\`;
     return 'now';
 }
 
@@ -220,183 +220,17 @@ function getTimeAgo(timestamp) {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
     
-    if (diffDays > 0) return `${diffDays}d ago`;
-    if (diffHours > 0) return `${diffHours}h ago`;
-    if (diffMins > 0) return `${diffMins}m ago`;
+    if (diffDays > 0) return \`\${diffDays}d ago\`;
+    if (diffHours > 0) return \`\${diffHours}h ago\`;
+    if (diffMins > 0) return \`\${diffMins}m ago\`;
     return 'just now';
 }
 
 // Load trades on page load
 loadRecentTrades();
 
-// Set up real-time updates - Supabase Realtime is having connection issues, 
-// so we'll rely on SSE for now and make Realtime optional
-console.log('[Realtime] Skipping Supabase Realtime due to connection issues, using SSE');
-// setupRealtimeSubscriptions(); // Commented out until Realtime is fixed
-
-// Manual enablement for testing
-window.enableRealtimeSubscriptions = function() {
-    console.log('[Realtime] Manually enabling Supabase Realtime...');
-    setupRealtimeSubscriptions();
-};
-
-function setupRealtimeSubscriptions() {
-    console.log('[Realtime] Setting up Supabase Realtime subscriptions...');
-    console.log('[Realtime] Note: Listening to tables directly since views do not support Realtime');
-    
-    try {
-        // Subscribe to whale_trades table changes (not the view!)
-        const tradesChannel = window.supabase.channel('database_changes')
-        .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'whale_trades' 
-        }, (payload) => {
-            console.log('[Realtime] New whale trade INSERT on table:', payload.new);
-            handleNewTradeFromTable(payload.new);
-        })
-        .on('postgres_changes', { 
-            event: 'UPDATE', 
-            schema: 'public', 
-            table: 'tokens' 
-        }, (payload) => {
-            console.log('[Realtime] Token metadata UPDATE:', payload.new);
-            handleTokenMetadataUpdate(payload.new);
-        })
-        .subscribe((status, err) => {
-            if (status === 'SUBSCRIBED') {
-                console.log('[Realtime] ✓ Successfully subscribed to table changes');
-            } else if (status === 'CHANNEL_ERROR') {
-                console.error('[Realtime] ✗ Channel error:', err);
-            } else if (status === 'TIMED_OUT') {
-                console.error('[Realtime] ✗ Subscription timed out');
-            } else if (status === 'CLOSED') {
-                console.log('[Realtime] ⚠ Channel closed, attempting to reconnect...');
-                setTimeout(setupRealtimeSubscriptions, 5000);
-            } else {
-                console.log(`[Realtime] Status: ${status}`, err);
-            }
-        });
-        
-        // Store channel reference for cleanup
-        window.realtimeChannel = tradesChannel;
-        
-    } catch (error) {
-        console.error('[Realtime] Failed to setup subscriptions:', error);
-        console.log('[Realtime] Will rely on SSE fallback for real-time updates');
-    }
-}
-
-// Handle new trade from table INSERT (not view)
-async function handleNewTradeFromTable(newTradeRow) {
-    try {
-        console.log('[Realtime] Processing new trade from table:', newTradeRow);
-        
-        // Fetch the complete trade data with joins to reconstruct view-like data
-        const { data: tradeData, error } = await window.supabase
-            .from('whale_trades')
-            .select(`
-                id,
-                wallet_address,
-                coin_address,
-                trade_type,
-                sol_amount,
-                token_amount,
-                transaction_hash,
-                trade_timestamp,
-                tracked_wallets!inner(
-                    alias,
-                    ui_color,
-                    twitter_handle,
-                    telegram_channel,
-                    streaming_channel,
-                    image_data
-                ),
-                tokens(
-                    symbol,
-                    name
-                )
-            `)
-            .eq('id', newTradeRow.id)
-            .single();
-
-        if (error) {
-            console.error('[Realtime] Error fetching trade details:', error);
-            return;
-        }
-
-        if (tradeData) {
-            const wallet = tradeData.tracked_wallets;
-            const token = tradeData.tokens;
-            
-            const trade = {
-                id: tradeData.id,
-                trade_type: tradeData.trade_type,
-                sol_amount: tradeData.sol_amount || 0,
-                token_amount: tradeData.token_amount,
-                token_symbol: token?.symbol,
-                token_name: token?.name,
-                token_address: tradeData.coin_address,
-                transaction_hash: tradeData.transaction_hash,
-                trade_timestamp: tradeData.trade_timestamp,
-                time_ago: 'just now'
-            };
-
-            console.log('[Realtime] ✓ Adding new trade to wallet manager:', trade);
-
-            // Add to wallet manager
-            window.walletTradeManager.addTrade(
-                tradeData.wallet_address,
-                trade,
-                wallet?.alias,
-                wallet?.ui_color,
-                false, // is_verified
-                wallet?.twitter_handle,
-                wallet?.telegram_channel,
-                wallet?.streaming_channel,
-                wallet?.image_data
-            );
-
-            // Re-render wallets
-            renderWallets();
-
-            // Scroll to top to show new trade
-            document.getElementById('trades-container').scrollTop = 0;
-        }
-    } catch (error) {
-        console.error('[Realtime] Error handling new trade from table:', error);
-    }
-}
-
-// Handle token metadata updates
-async function handleTokenMetadataUpdate(updatedToken) {
-    try {
-        console.log('[Realtime] Token metadata updated:', updatedToken);
-        
-        // Find any trades in our current wallet manager that use this token
-        const sortedWallets = window.walletTradeManager.getSortedWallets();
-        let needsUpdate = false;
-        
-        for (const wallet of sortedWallets) {
-            for (const trade of wallet.trades) {
-                if (trade.token_address === updatedToken.address) {
-                    // Update the trade with new token info
-                    trade.token_symbol = updatedToken.symbol;
-                    trade.token_name = updatedToken.name;
-                    needsUpdate = true;
-                }
-            }
-        }
-        
-        if (needsUpdate) {
-            console.log('[Realtime] ✓ Updating trades with new token metadata');
-            renderWallets();
-        }
-        
-    } catch (error) {
-        console.error('[Realtime] Error handling token metadata update:', error);
-    }
-}
+// Real-time updates via SSE only - no Supabase Realtime
+console.log('[SSE] Using Server-Sent Events for real-time updates');
 
 // Listen for real-time updates via SSE (primary method due to Realtime issues)
 document.addEventListener('htmx:sseMessage', (event) => {
@@ -412,7 +246,7 @@ document.addEventListener('htmx:sseMessage', (event) => {
             const tokenName = trade.tokens?.name || trade.token_name || null;
             
             // Extract wallet information
-            const walletAlias = trade.tracked_wallets?.alias || trade.wallet_alias || `${trade.wallet_address.slice(0, 8)}...`;
+            const walletAlias = trade.tracked_wallets?.alias || trade.wallet_alias || \`\${trade.wallet_address.slice(0, 8)}...\`;
             const walletColor = trade.tracked_wallets?.ui_color || trade.wallet_color || '#4338ca';
             const isVerified = trade.tracked_wallets?.is_verified || trade.is_verified || false;
             const twitterHandle = trade.tracked_wallets?.twitter_handle;
@@ -476,4 +310,4 @@ document.addEventListener('htmx:sseError', (event) => {
 document.addEventListener('htmx:sseClose', () => {
     console.log('[SSE] ⚠ SSE connection closed');
 });
-</script>
+</script>`;

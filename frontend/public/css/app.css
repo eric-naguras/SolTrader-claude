@@ -1,5 +1,182 @@
 /* Custom styles for Sonar Platform */
 
+/* Tag Filter Styles */
+.tag-filter-container {
+    margin-bottom: 1rem;
+}
+
+.tag-filter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.tag-filter-header h1 {
+    margin: 0;
+}
+
+.tag-filter-icon-wrapper {
+    position: relative;
+}
+
+.tag-filter-icon {
+    background: none;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.tag-filter-icon:hover {
+    border-color: var(--pico-primary);
+    background-color: var(--pico-background-color);
+}
+
+.tag-filter-icon.has-active-filters {
+    border-color: var(--pico-primary);
+    color: var(--pico-primary);
+}
+
+.tag-filter-icon svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+}
+
+.filter-count {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: var(--pico-del-color);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+}
+
+.tag-filter-popup {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    background-color: var(--pico-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    min-width: 250px;
+    max-width: 350px;
+    z-index: 1000;
+}
+
+.tag-filter-popup.interactive {
+    padding: 1rem;
+}
+
+.tag-filter-header-controls {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.toggle-all-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-all-label input[type="checkbox"][role="switch"] {
+    margin-bottom: 0;
+}
+
+.text-button {
+    background: none;
+    border: none;
+    color: var(--pico-primary);
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.875rem;
+    text-decoration: underline;
+}
+
+.text-button:hover {
+    color: var(--pico-primary-hover);
+}
+
+.tag-filter-content {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.tag-filter-content.preview {
+    padding: 1rem;
+}
+
+.tag-checkbox {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.tag-checkbox:hover {
+    background-color: var(--pico-secondary-background);
+}
+
+.tag-checkbox.checked {
+    background-color: var(--pico-primary-background);
+}
+
+.tag-checkbox input[type="checkbox"] {
+    margin-right: 0.75rem;
+    margin-bottom: 0;
+}
+
+.tag-checkbox span {
+    flex-grow: 1;
+    user-select: none;
+}
+
+.tag-checkbox .checkmark {
+    color: var(--pico-del-color);
+    font-weight: bold;
+    margin-left: 0.5rem;
+}
+
+.tag-filter-footer {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--pico-muted-border-color);
+    display: flex;
+    gap: 0.5rem;
+}
+
+.tag-filter-footer button {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.tag-filter-popup[x-show] {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.tag-filter-popup[x-show="false"] {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
 /* Responsive layout */
 @media (min-width: 1600px) {
     main.container-fluid {
@@ -403,6 +580,14 @@ table {
     font-size: 0.875rem;
 }
 
+th.sortable {
+  cursor: pointer;
+}
+
+th.sortable:hover {
+  background-color: var(--pico-muted-background-color);
+}
+
 @media (max-width: 768px) {
     table {
         font-size: 0.75rem;
@@ -434,6 +619,24 @@ table {
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
     animation: slideUp 0.3s ease-out;
     z-index: 1000;
+}
+
+.toast-error {
+    background-color: var(--pico-del-color);
+    border-color: var(--pico-del-color);
+    color: var(--pico-del-color-inverse);
+}
+
+.toast-success {
+    background-color: var(--pico-ins-color);
+    border-color: var(--pico-ins-color);
+    color: var(--pico-ins-color-inverse);
+}
+
+.toast-info {
+    background-color: var(--pico-primary-background);
+    border-color: var(--pico-primary-border);
+    color: var(--pico-primary-inverse);
 }
 
 @keyframes slideUp {
@@ -505,4 +708,101 @@ dialog article {
     display: block;
     margin: 0 auto;
     border-radius: 0.25rem;
+}
+
+/* Form validation styles */
+.validation-error {
+    border-color: var(--pico-del-color) !important;
+    background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+.error-text {
+    color: var(--pico-del-color);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+.validation-success {
+    border-color: var(--pico-ins-color) !important;
+    background-color: rgba(16, 185, 129, 0.1) !important;
+}
+
+.success-text {
+    color: var(--pico-ins-color);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+/* Disabled button styles */
+button.disabled,
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Real-time validation feedback */
+input:focus.validation-error {
+    box-shadow: 0 0 0 0.125rem rgba(239, 68, 68, 0.25);
+}
+
+input:focus.validation-success {
+    box-shadow: 0 0 0 0.125rem rgba(16, 185, 129, 0.25);
+}
+
+/* Settings messages */
+.success-message {
+    color: var(--pico-ins-color);
+    margin-top: 1rem;
+    font-size: 0.875rem;
+}
+
+.info-message {
+    color: var(--pico-muted-color);
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.error-message {
+    color: var(--pico-del-color);
+    margin-top: 1rem;
+    font-size: 0.875rem;
+}
+
+/* Loading indicator for async validation */
+.validating {
+    position: relative;
+}
+
+.validating::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--pico-muted-color);
+    border-top: 2px solid var(--pico-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: translateY(-50%) rotate(0deg); }
+    100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Sortable table headers */
+.sort-icon {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  color: var(--pico-muted-color);
+}
+
+.sort-icon.active {
+  color: #007bff;
 }

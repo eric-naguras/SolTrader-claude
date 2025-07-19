@@ -1,4 +1,4 @@
-<section>
+export const dashboardPage = () => /*html*/ `<section>
     <h1>Dashboard</h1>
     
     <!-- Stats Grid -->
@@ -48,4 +48,4 @@
             <article aria-busy="true">Loading positions...</article>
         </div>
     </section>
-</section>
+</section>`;

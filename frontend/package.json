@@ -3,20 +3,36 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Sonar platform frontend - HTMX powered",
+  "main": "server.ts",
   "scripts": {
-    "dev": "tsx watch server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js"
+    "dev": "bun --watch run server.ts",
+    "start": "bun run server.ts",
+    "build": "bun build server.ts --outdir dist --target bun",
+    "build:node": "tsc",
+    "start:node": "node dist/server.js",
+    "deploy": "wrangler deploy",
+    "dev:worker": "wrangler dev",
+    "test": "cp .env.test .env && bun test",
+    "test:watch": "cp .env.test .env && bun test --watch",
+    "test:setup": "cp .env.test .env && bun run test:schema",
+    "test:schema": "psql $DATABASE_URL -f test-schema.sql"
   },
   "dependencies": {
-    "hono": "^4.0.0",
-    "@hono/node-server": "^1.15.0",
+    "@hono/node-server": "^1.8.0",
+    "@neondatabase/serverless": "^1.0.1",
     "@supabase/supabase-js": "^2.39.0",
-    "dotenv": "^16.3.0"
+    "hono": "^4.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "tsx": "^4.6.0",
-    "typescript": "^5.3.0"
-  }
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "@types/bun": "latest",
+    "bun-types": "^0.1.0",
+    "typescript": "^5.3.0",
+    "wrangler": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "author": "Eric"
 }

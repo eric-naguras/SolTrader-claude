@@ -216,3 +216,4 @@ psql 'postgresql://neondb_owner:npg_aVGRyTA69KnJ@ep-falling-firefly-a1m7md7i-poo
 
 kiki=k2
 psql 'postgresql://neondb_owner:npg_aVGRyTA69KnJ@ep-dry-star-a1n5wnyd-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+ 

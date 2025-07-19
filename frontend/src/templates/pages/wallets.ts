@@ -1,23 +1,36 @@
-<section x-data="walletForm">
-    <h1>Tracked Wallets</h1>
+export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="init()">
     
     <!-- Add Wallet Form -->
-    <details :open="showForm">
-        <summary role="button" @click="showForm = !showForm">Add New Wallet</summary>
+    <div>
+        <button type="button" 
+                @click="showForm = !showForm" 
+                :class="{ 'contrast': showForm }"
+                style="width: 100%; text-align: left; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+            <span>Add New Wallet</span>
+            <span x-text="showForm ? '▼' : '▶'"></span>
+        </button>
+        <div x-show="showForm" x-transition>
         <form @submit.prevent="submitForm">
             <div class="grid">
                 <div>
                     <label for="address">
-                        Wallet Address
+                        Wallet Address *
                         <input type="text" id="address" x-model="address" required 
-                               placeholder="Enter Solana wallet address">
+                               placeholder="Enter Solana wallet address"
+                               @input="validateAddress()"
+                               :class="{ 'validation-error': addressError }"
+                               autocomplete="off">
+                        <small x-show="addressError" x-text="addressError" class="error-text"></small>
                     </label>
                 </div>
                 <div>
                     <label for="alias">
-                        Alias (Optional)
-                        <input type="text" id="alias" x-model="alias" 
-                               placeholder="e.g., Smart Money #1">
+                        Alias *
+                        <input type="text" id="alias" x-model="alias" required
+                               placeholder="e.g., Smart Money #1"
+                               @input="validateAlias()"
+                               :class="{ 'validation-error': aliasError }">
+                        <small x-show="aliasError" x-text="aliasError" class="error-text"></small>
                     </label>
                 </div>
             </div>
@@ -25,15 +38,18 @@
             <div class="grid">
                 <div>
                     <label for="tags">
-                        Tags (comma-separated)
-                        <input type="text" id="tags" x-model="tags" 
-                               placeholder="e.g., whale, insider, kol">
+                        Tags * (comma-separated)
+                        <input type="text" id="tags" x-model="tags" required
+                               placeholder="e.g., whale, insider, kol"
+                               @input="validateTags()"
+                               :class="{ 'validation-error': tagsError }">
+                        <small x-show="tagsError" x-text="tagsError" class="error-text"></small>
                     </label>
                 </div>
                 <div>
                     <label for="ui_color">
-                        Display Color
-                        <input type="color" id="ui_color" x-model="ui_color">
+                        Display Color *
+                        <input type="color" id="ui_color" x-model="ui_color" required>
                     </label>
                 </div>
             </div>
@@ -114,11 +130,12 @@
             </div>
             
             <div class="grid">
-                <button type="submit">Add Wallet</button>
+                <button type="submit" :disabled="!isFormValid" :class="{ 'disabled': !isFormValid }">Add Wallet</button>
                 <button type="button" class="secondary" @click="showForm = false">Cancel</button>
             </div>
         </form>
-    </details>
+        </div>
+    </div>
 
     <!-- Wallets Table -->
     <div id="wallets-table" hx-get="/htmx/partials/wallets-table" hx-trigger="load, refresh">
@@ -137,14 +154,20 @@
                 <div class="grid">
                     <div>
                         <label for="edit-alias">
-                            Alias
-                            <input type="text" id="edit-alias" x-model="editData.alias">
+                            Alias *
+                            <input type="text" id="edit-alias" x-model="editData.alias" required
+                                   @input="validateEditAlias()"
+                                   :class="{ 'validation-error': editAliasError }">
+                            <small x-show="editAliasError" x-text="editAliasError" class="error-text"></small>
                         </label>
                     </div>
                     <div>
                         <label for="edit-tags">
-                            Tags (comma-separated)
-                            <input type="text" id="edit-tags" x-model="editData.tags">
+                            Tags * (comma-separated)
+                            <input type="text" id="edit-tags" x-model="editData.tags" required
+                                   @input="validateEditTags()"
+                                   :class="{ 'validation-error': editTagsError }">
+                            <small x-show="editTagsError" x-text="editTagsError" class="error-text"></small>
                         </label>
                     </div>
                 </div>
@@ -243,11 +266,11 @@
                 
                 <footer>
                     <div class="grid">
-                        <button type="submit">Save Changes</button>
+                        <button type="submit" :disabled="!isEditFormValid" :class="{ 'disabled': !isEditFormValid }">Save Changes</button>
                         <button type="button" class="secondary" @click="closeModal()">Cancel</button>
                     </div>
                 </footer>
             </form>
         </article>
     </dialog>
-</section>
+</section>`;

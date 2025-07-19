@@ -1,4 +1,4 @@
-<div x-data="loggingConfig">
+export const loggingConfigPartial = () => `<div x-data="loggingConfig">
     <article>
         <header>
             <h3>Log Categories</h3>
@@ -116,7 +116,7 @@
                 <button @click="savePreset" class="secondary">Save as Preset</button>
                 <button @click="resetDefaults" class="outline">Reset to Defaults</button>
             </div>
-            <small x-show="lastSaved" x-text="`Last saved: ${lastSaved}`"></small>
+            <small x-show="lastSaved" x-text="\`Last saved: \${lastSaved}\`"></small>
         </footer>
     </article>
-</div>
+</div>`;

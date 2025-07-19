@@ -1,4 +1,4 @@
-<div x-data="{ positions: [] }">
+export const openPositionsPartial = () => `<div x-data="{ positions: [] }">
     <table>
         <thead>
             <tr>
@@ -43,25 +43,25 @@ fetch('http://localhost:3001/api/trades/positions', {
             const timeSince = formatTimestamp(position.entry_timestamp);
             
             const row = document.createElement('tr');
-            row.innerHTML = `
+            row.innerHTML = \`
                 <td>
-                    <strong>${tokenInfo.symbol || 'Unknown'}</strong><br>
-                    <small><code>${position.coin_address.slice(0, 8)}...</code></small>
+                    <strong>\${tokenInfo.symbol || 'Unknown'}</strong><br>
+                    <small><code>\${position.coin_address.slice(0, 8)}...</code></small>
                 </td>
-                <td>$${position.entry_price?.toFixed(6) || '-'}</td>
-                <td>$${position.current_price?.toFixed(6) || '-'}</td>
-                <td class="${position.pnl_percentage > 0 ? 'pnl-positive' : 'pnl-negative'}">
-                    ${position.pnl_percentage ? (position.pnl_percentage > 0 ? '+' : '') + position.pnl_percentage.toFixed(2) + '%' : '-'}
+                <td>$\${position.entry_price?.toFixed(6) || '-'}</td>
+                <td>$\${position.current_price?.toFixed(6) || '-'}</td>
+                <td class="\${position.pnl_percentage > 0 ? 'pnl-positive' : 'pnl-negative'}">
+                    \${position.pnl_percentage ? (position.pnl_percentage > 0 ? '+' : '') + position.pnl_percentage.toFixed(2) + '%' : '-'}
                 </td>
-                <td>${position.trade_amount_sol || '-'}</td>
-                <td>${timeSince}</td>
+                <td>\${position.trade_amount_sol || '-'}</td>
+                <td>\${timeSince}</td>
                 <td>
-                    <button class="outline" onclick="closePosition('${position.id}')" 
+                    <button class="outline" onclick="closePosition('\${position.id}')" 
                             style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
                         Close
                     </button>
                 </td>
-            `;
+            \`;
             tbody.appendChild(row);
         });
     })
@@ -74,7 +74,7 @@ async function closePosition(id) {
     if (!confirm('Are you sure you want to close this position?')) return;
     
     try {
-        const response = await fetch(`http://localhost:3001/api/trades/${id}/close`, {
+        const response = await fetch(\`http://localhost:3001/api/trades/\${id}/close\`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -95,4 +95,4 @@ async function closePosition(id) {
         showToast('Failed to close position', 'error');
     }
 }
-</script>
+</script>`;

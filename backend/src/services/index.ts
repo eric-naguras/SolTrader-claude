@@ -1,7 +1,7 @@
 import { WhaleWatcher } from './whale-watcher.js';
 import { WhaleWatcherPolling } from './whale-watcher-polling.js';
 import { WhaleWatcherStream } from './whale-watcher-stream.js';
-import { NotifierService } from './notifier.js';
+import { WebhookRelayService } from './webhook-relay.js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -18,23 +18,29 @@ class ServiceManager {
   async start() {
     console.log('[ServiceManager] Starting all services...');
 
+    // Start webhook relay service first
+    const webhookRelay = new WebhookRelayService();
+    webhookRelay.start(4001); // Run on separate port
+    
     // Start WhaleWatcher - use streaming version for real-time monitoring
     try {
       const whaleWatcher = new WhaleWatcherStream();
       await whaleWatcher.start();
       this.services.set('whale-watcher', whaleWatcher);
+      
+      // Connect whale watcher to webhook relay
+      webhookRelay.setWhaleWatcher(whaleWatcher);
+      
+      // Register logger for webhook config updates
+      const logger = (whaleWatcher as any).logger;
+      if (logger) {
+        webhookRelay.registerLogger('whale-watcher', logger);
+      }
     } catch (error) {
       console.error('[ServiceManager] Failed to start WhaleWatcher:', error);
     }
 
-    // Start Notifier
-    try {
-      const notifier = new NotifierService();
-      await notifier.start();
-      this.services.set('notifier', notifier);
-    } catch (error) {
-      console.error('[ServiceManager] Failed to start Notifier:', error);
-    }
+    // Notifier is now handled by webhook-notifier.ts integrated into frontend server
 
     console.log('[ServiceManager] All services started');
 

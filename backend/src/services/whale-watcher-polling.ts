@@ -1,5 +1,6 @@
 import { Helius } from 'helius-sdk';
 import { supabase, type TrackedWallet, type WhaleTrade } from '../lib/supabase.js';
+import { tokenMetadataService } from './token-metadata.js';
 
 export class WhaleWatcherPolling {
   private helius: Helius;
@@ -219,17 +220,52 @@ export class WhaleWatcherPolling {
   }
 
   private async ensureTokenExists(address: string) {
-    const { error } = await supabase
-      .from('tokens')
-      .upsert({
-        address,
-        last_seen: new Date().toISOString()
-      }, {
-        onConflict: 'address'
-      });
+    try {
+      // Check if token exists with metadata
+      const { data: existingToken } = await supabase
+        .from('tokens')
+        .select('address, symbol, name')
+        .eq('address', address)
+        .single();
 
-    if (error) {
-      console.error('[WhaleWatcher] Error upserting token:', error);
+      if (existingToken?.symbol && existingToken?.name) {
+        // Token already has metadata, just update last_seen
+        await supabase
+          .from('tokens')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('address', address);
+        return;
+      }
+
+      // Fetch metadata for new or incomplete tokens
+      const metadata = await tokenMetadataService.getTokenMetadata(address);
+      
+      await supabase
+        .from('tokens')
+        .upsert({
+          address,
+          symbol: metadata?.symbol || null,
+          name: metadata?.name || null,
+          metadata: metadata ? {
+            logoURI: metadata.logoURI,
+            decimals: metadata.decimals
+          } : null,
+          last_seen: new Date().toISOString()
+        }, {
+          onConflict: 'address'
+        });
+
+    } catch (error) {
+      console.error('[WhaleWatcher] Error in ensureTokenExists:', error);
+      // Fallback: create token without metadata
+      await supabase
+        .from('tokens')
+        .upsert({
+          address,
+          last_seen: new Date().toISOString()
+        }, {
+          onConflict: 'address'
+        });
     }
   }
 

@@ -93,9 +93,40 @@ class SolscanProvider implements TokenMetadataProvider {
 
   async fetchMetadata(address: string): Promise<TokenMetadata | null> {
     try {
-      const response = await fetch(`https://api.solscan.io/token/meta?token=${address}`);
-      if (response.ok) {
-        const data: any = await response.json();
+      const headers: Record<string, string> = {
+        'User-Agent': 'SolTrader/1.0',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      };
+      
+      if (process.env.SOLSCAN_API_KEY) {
+        headers['token'] = process.env.SOLSCAN_API_KEY;
+      }
+      
+      // Try v2 API first
+      const v2Response = await fetch(`https://api.solscan.io/v2/token/meta?address=${address}`, { headers });
+      if (v2Response.ok) {
+        const data: any = await v2Response.json();
+        if (data && data.result && (data.result.symbol || data.result.name)) {
+          return {
+            address,
+            symbol: data.result.symbol || data.result.name,
+            name: data.result.name || data.result.symbol,
+            logoURI: data.result.logo,
+            decimals: data.result.decimals
+          };
+        }
+      }
+      
+      // Fallback to v1 API
+      const v1Response = await fetch(`https://api.solscan.io/token/meta?token=${address}`, { 
+        headers: {
+          ...headers,
+          'X-API-KEY': process.env.SOLSCAN_API_KEY || ''
+        }
+      });
+      if (v1Response.ok) {
+        const data: any = await v1Response.json();
         if (data && data.data && (data.data.symbol || data.data.name)) {
           return {
             address,
@@ -106,6 +137,7 @@ class SolscanProvider implements TokenMetadataProvider {
           };
         }
       }
+      
     } catch (error) {
       console.log(`[TokenMetadata] Solscan API failed for ${address}:`, error);
     }
@@ -113,27 +145,58 @@ class SolscanProvider implements TokenMetadataProvider {
   }
 }
 
-class SolanaFMProvider implements TokenMetadataProvider {
-  name = 'SolanaFM';
+class DexScreenerProvider implements TokenMetadataProvider {
+  name = 'DexScreener';
 
   async fetchMetadata(address: string): Promise<TokenMetadata | null> {
     try {
-      const response = await fetch(`https://api.solana.fm/v0/tokens/${address}`);
+      const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
       if (response.ok) {
         const data: any = await response.json();
-        if (data && data.result && (data.result.data.symbol || data.result.data.name)) {
-          const tokenData = data.result.data;
-          return {
-            address,
-            symbol: tokenData.symbol || tokenData.name,
-            name: tokenData.name || tokenData.symbol,
-            logoURI: tokenData.logoURI,
-            decimals: tokenData.decimals
-          };
+        if (data && data.pairs && data.pairs.length > 0) {
+          const pair = data.pairs[0];
+          const token = pair.baseToken?.address === address ? pair.baseToken : pair.quoteToken;
+          if (token && (token.symbol || token.name)) {
+            return {
+              address,
+              symbol: token.symbol,
+              name: token.name || token.symbol,
+              logoURI: null,
+              decimals: null
+            };
+          }
         }
       }
     } catch (error) {
-      console.log(`[TokenMetadata] SolanaFM API failed for ${address}:`, error);
+      console.log(`[TokenMetadata] DexScreener API failed for ${address}:`, error);
+    }
+    return null;
+  }
+}
+
+class GeckoTerminalProvider implements TokenMetadataProvider {
+  name = 'GeckoTerminal';
+
+  async fetchMetadata(address: string): Promise<TokenMetadata | null> {
+    try {
+      const response = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${address}`);
+      if (response.ok) {
+        const data: any = await response.json();
+        if (data && data.data && data.data.attributes) {
+          const attrs = data.data.attributes;
+          if (attrs.symbol || attrs.name) {
+            return {
+              address,
+              symbol: attrs.symbol,
+              name: attrs.name || attrs.symbol,
+              logoURI: attrs.image_url,
+              decimals: attrs.decimals
+            };
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`[TokenMetadata] GeckoTerminal API failed for ${address}:`, error);
     }
     return null;
   }
@@ -146,10 +209,10 @@ export class TokenMetadataService {
 
   constructor() {
     this.providers = [
-      new JupiterProvider(), // Try Jupiter first as it has comprehensive token list
-      new HeliusProvider(),  // Then Helius 
-      new SolscanProvider(), // Then Solscan
-      new SolanaFMProvider() // Finally SolanaFM
+      new JupiterProvider(),     // Try Jupiter first for established tokens
+      new DexScreenerProvider(), // DexScreener for meme coins and new tokens
+      new GeckoTerminalProvider(), // GeckoTerminal for additional meme coin coverage
+      new SolscanProvider()      // Solscan as final fallback
     ];
   }
 

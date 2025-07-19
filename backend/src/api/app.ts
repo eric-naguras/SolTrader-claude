@@ -16,6 +16,7 @@ import { tradeRoutes } from './routes/trades.js';
 import { tokenRoutes } from './routes/tokens.js';
 import { healthRoutes } from './routes/health.js';
 import { settingsRoutes } from './routes/settings.js';
+import { webhookRoutes } from './routes/webhooks.js';
 import { supabase } from '../lib/supabase.js';
 
 const app = new Hono();
@@ -53,6 +54,9 @@ app.route('/api/tokens', tokenRoutes);
 app.route('/api/health', healthRoutes);
 app.route('/api/settings', settingsRoutes);
 
+// Webhook routes (no auth required for database triggers)
+app.route('/webhooks', webhookRoutes);
+
 // SSE endpoint for real-time updates
 app.get('/api/events', async (c) => {
   // Set CORS headers specifically for SSE
@@ -69,33 +73,8 @@ app.get('/api/events', async (c) => {
         // Send initial connection message
         controller.enqueue(new TextEncoder().encode('data: {"type":"connected"}\n\n'));
         
-        // Subscribe to new whale trades
-        const channel = supabase
-          .channel('whale_trades_realtime')
-          .on('postgres_changes', 
-            { 
-              event: 'INSERT', 
-              schema: 'public', 
-              table: 'whale_trades' 
-            },
-            async (payload) => {
-              // Get full trade data from view
-              const { data: trade } = await supabase
-                .from('recent_whale_trades')
-                .select('*')
-                .eq('id', payload.new.id)
-                .single();
-              
-              if (trade) {
-                const message = JSON.stringify({
-                  type: 'new_trade',
-                  trade
-                });
-                controller.enqueue(new TextEncoder().encode(`data: ${message}\n\n`));
-              }
-            }
-          )
-          .subscribe();
+        // Note: Real-time updates are now handled via webhooks
+        // The frontend server receives webhook notifications and broadcasts them via SSE
         
         // Keep connection alive
         const interval = setInterval(() => {
@@ -105,7 +84,6 @@ app.get('/api/events', async (c) => {
         // Cleanup on abort
         c.req.raw.signal.addEventListener('abort', () => {
           clearInterval(interval);
-          channel.unsubscribe();
           controller.close();
         });
       }

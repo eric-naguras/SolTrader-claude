@@ -1,4 +1,4 @@
-<section x-data="tradeManager">
+export const tradesPage = () => /*html*/ `<section x-data="tradeManager">
     <h1>Trade History</h1>
     
     <!-- Trade Filters -->
@@ -47,4 +47,4 @@
     <div id="trades-table" hx-get="/htmx/partials/trades-table" hx-trigger="load">
         <article aria-busy="true">Loading trades...</article>
     </div>
-</section>
+</section>`;
