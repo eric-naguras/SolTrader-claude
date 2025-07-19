@@ -12,10 +12,11 @@ export function walletRowPartial(wallet: TrackedWallet): string {
     socials.push(`<a href="${wallet.streaming_channel.startsWith('http') ? wallet.streaming_channel : 'https://' + wallet.streaming_channel}" target="_blank" title="Stream">📺</a>`);
   }
 
-  const formattedBalance = wallet.sol_balance 
-    ? (wallet.sol_balance >= 1 
-        ? Math.round(wallet.sol_balance).toString() 
-        : wallet.sol_balance.toFixed(1))
+  const solBalanceNum = typeof wallet.sol_balance === 'number' ? wallet.sol_balance : Number(wallet.sol_balance);
+  const formattedBalance = solBalanceNum 
+    ? (solBalanceNum >= 1 
+        ? Math.round(solBalanceNum).toString() 
+        : solBalanceNum.toFixed(1))
     : '-';
   const createdDate = new Date(wallet.created_at);
   const age = Math.floor((Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
