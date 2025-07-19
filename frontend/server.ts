@@ -201,8 +201,9 @@ app.patch('/htmx/wallets/:address/toggle', async (c) => {
 app.get('/htmx/partials/wallets-table', async (c) => {
   try {
     const { sortBy, sortOrder } = c.req.query();
-    const wallets = await getTrackedWallets(sortBy, sortOrder);
-    const tableHtml = walletsTablePartial(wallets, sortBy, sortOrder);
+    const validSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
+    const wallets = await getTrackedWallets(sortBy, validSortOrder);
+    const tableHtml = walletsTablePartial(wallets, sortBy, validSortOrder);
     return c.html(tableHtml);
   } catch (error) {
     console.error('Error fetching wallets for HTMX:', error);

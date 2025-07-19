@@ -257,7 +257,7 @@ document.addEventListener('alpine:init', () => {
             
             this.isEditValidating = true;
             const response = await fetch(`${window.CONFIG.API_URL}/api/wallets/${this.editData.address}`, {
-                method: 'PATCH',
+                method: 'PUT',
                 headers: { 
                     'Content-Type': 'application/json',
                     'X-API-Key': window.CONFIG.API_KEY
