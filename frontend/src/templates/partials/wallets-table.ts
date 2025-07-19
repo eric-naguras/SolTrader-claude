@@ -1,7 +1,15 @@
 import { TrackedWallet } from '../../lib/database';
 import { walletRowPartial } from './wallet-row';
 
-export function walletsTablePartial(wallets: TrackedWallet[]): string {
+const renderSortIcon = (isCurrentSort: boolean, sortOrder: 'asc' | 'desc') => {
+    if (isCurrentSort) {
+        const icon = sortOrder === 'asc' ? '▲' : '▼';
+        return `<span class="sort-icon active">${icon}</span>`;
+    }
+    return `<span class="sort-icon inactive">▼</span>`;
+};
+
+export function walletsTablePartial(wallets: TrackedWallet[], sortBy: string = 'created_at', sortOrder: 'asc' | 'desc' = 'desc'): string {
   if (wallets.length === 0) {
     return /*html*/ `
       <table>
@@ -32,18 +40,28 @@ export function walletsTablePartial(wallets: TrackedWallet[]): string {
     `;
   }
 
+    const buildSortableTh = (key: string, label: string) => {
+        const isCurrentSort = key === sortBy;
+        const newSortOrderForHeader = isCurrentSort ? (sortOrder === 'asc' ? 'desc' : 'asc') : 'asc';
+        return `
+            <th hx-get="/htmx/partials/wallets-table?sortBy=${key}&sortOrder=${newSortOrderForHeader}" class="sortable">
+              ${label} ${renderSortIcon(isCurrentSort, sortOrder)}
+            </th>
+        `;
+    };
+
   let tableHtml = /*html*/ `
-    <table>
+    <table hx-target="this" hx-swap="outerHTML">
       <thead>
         <tr>
           <th></th>
-          <th>Alias</th>
+          ${buildSortableTh('alias', 'Alias')}
           <th>Address</th>
           <th>Socials</th>
-          <th>Balance</th>
-          <th>Tags</th>
-          <th>Status</th>
-          <th>Age</th>
+          ${buildSortableTh('sol_balance', 'Balance')}
+          ${buildSortableTh('tags', 'Tags')}
+          ${buildSortableTh('is_active', 'Status')}
+          ${buildSortableTh('created_at', 'Age')}
           <th>Actions</th>
         </tr>
       </thead>
@@ -71,4 +89,32 @@ export function walletsTableErrorPartial(): string {
       </button>
     </div>
   `;
+}
+
+// Helper function to format time since a date
+export function timeSince(dateString: string): string {
+  const date = new Date(dateString);
+  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+
+  let interval = seconds / 31536000;
+  if (interval > 1) {
+    return Math.floor(interval) + "y";
+  }
+  interval = seconds / 2592000;
+  if (interval > 1) {
+    return Math.floor(interval) + "mo";
+  }
+  interval = seconds / 86400;
+  if (interval > 1) {
+    return Math.floor(interval) + "d";
+  }
+  interval = seconds / 3600;
+  if (interval > 1) {
+    return Math.floor(interval) + "h";
+  }
+  interval = seconds / 60;
+  if (interval > 1) {
+    return Math.floor(interval) + "m";
+  }
+  return Math.floor(seconds) + "s";
 }
