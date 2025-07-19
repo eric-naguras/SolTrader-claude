@@ -200,8 +200,9 @@ app.patch('/htmx/wallets/:address/toggle', async (c) => {
 // HTMX endpoints for wallets - return HTML fragments
 app.get('/htmx/partials/wallets-table', async (c) => {
   try {
-    const wallets = await getTrackedWallets();
-    const tableHtml = walletsTablePartial(wallets);
+    const { sortBy, sortOrder } = c.req.query();
+    const wallets = await getTrackedWallets(sortBy, sortOrder);
+    const tableHtml = walletsTablePartial(wallets, sortBy, sortOrder);
     return c.html(tableHtml);
   } catch (error) {
     console.error('Error fetching wallets for HTMX:', error);

@@ -20,10 +20,20 @@ export interface TrackedWallet {
   created_at: string;
 }
 
-export async function getTrackedWallets(): Promise<TrackedWallet[]> {
+export async function getTrackedWallets(sortBy: string = 'created_at', sortOrder: string = 'desc'): Promise<TrackedWallet[]> {
   try {
-    const result = await sql`
-      SELECT 
+    // Whitelist of allowed sort columns to prevent SQL injection
+    const allowedSortBy = ['alias', 'sol_balance', 'tags', 'is_active', 'created_at'];
+    const safeSortBy = allowedSortBy.includes(sortBy) ? sortBy : 'created_at';
+    
+    // Ensure sortOrder is either 'asc' or 'desc'
+    const safeSortOrder = sortOrder.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+    // Dynamically construct the ORDER BY clause
+    const orderByClause = `${safeSortBy} ${safeSortOrder}`;
+
+    const result = await sql.query(
+      `SELECT 
         id,
         address,
         alias,
@@ -39,8 +49,8 @@ export async function getTrackedWallets(): Promise<TrackedWallet[]> {
         is_active,
         created_at
       FROM tracked_wallets
-      ORDER BY created_at DESC
-    `;
+      ORDER BY ${orderByClause}`
+    );
     
     return result.map(row => ({
       ...row,

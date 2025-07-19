@@ -403,6 +403,14 @@ table {
     font-size: 0.875rem;
 }
 
+th.sortable {
+  cursor: pointer;
+}
+
+th.sortable:hover {
+  background-color: var(--pico-muted-background-color);
+}
+
 @media (max-width: 768px) {
     table {
         font-size: 0.75rem;
@@ -608,4 +616,16 @@ input:focus.validation-success {
 @keyframes spin {
     0% { transform: translateY(-50%) rotate(0deg); }
     100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Sortable table headers */
+.sort-icon {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  color: var(--pico-muted-color);
+}
+
+.sort-icon.active {
+  color: var(--pico-primary);
 }
