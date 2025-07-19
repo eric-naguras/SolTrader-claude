@@ -627,5 +627,5 @@ input:focus.validation-success {
 }
 
 .sort-icon.active {
-  color: var(--pico-primary);
+  color: #007bff;
 }
