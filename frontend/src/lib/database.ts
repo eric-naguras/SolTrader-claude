@@ -1,108 +1,257 @@
-import { createClient } from '@supabase/supabase-js';
-// import { config } from 'dotenv';
-// import { fileURLToPath } from 'node:url';
-// import { dirname, join } from 'node:path';
-import { ENV } from './env';
+import { neon } from '@neondatabase/serverless';
 
+// Create a SQL client using the DATABASE_URL from environment
+const sql = neon(process.env.DATABASE_URL!);
 
-// Load environment variables
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = dirname(__filename);
-// config({ path: join(__dirname, '../.env') });
-
-const supabaseUrl = ENV.SUPABASE_URL;
-const supabaseAnonKey = ENV.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-export interface TradeSignal {
+export interface TrackedWallet {
   id: string;
-  coin_address: string;
-  status: 'OPEN' | 'EXECUTED' | 'EXPIRED';
-  trigger_reason?: string;
-  metadata?: Record<string, any>;
-  created_at: string;
-  updated_at: string;
-  user_notes?: string;
-  // Relations
-  tokens?: {
-    symbol?: string;
-    name?: string;
-  };
-}
-
-export interface WhaleTrade {
-  id: number;
-  wallet_address: string;
-  coin_address: string;
-  trade_type: 'BUY' | 'SELL';
-  sol_amount?: number;
-  token_amount?: number;
-  transaction_hash: string;
-  trade_timestamp: string;
-  price_usd?: number;
-  // Flattened fields from view
-  wallet_alias?: string;
-  wallet_color?: string;
+  address: string;
+  alias: string;
+  tags: string[];
+  ui_color: string;
   twitter_handle?: string;
   telegram_channel?: string;
   streaming_channel?: string;
   image_data?: string;
-  is_verified?: boolean;
-  token_symbol?: string;
-  token_name?: string;
+  notes?: string;
+  sol_balance?: number;
+  last_balance_check?: string;
+  is_active: boolean;
+  created_at: string;
 }
 
-export async function getActiveSignals(): Promise<TradeSignal[]> {
-  const { data, error } = await supabase
-    .from('trade_signals')
-    .select(`
-      *,
-      tokens (
-        symbol,
-        name
-      )
-    `)
-    .eq('status', 'OPEN')
-    .order('created_at', { ascending: false })
-    .limit(10);
+export async function getTrackedWallets(): Promise<TrackedWallet[]> {
+  try {
+    const result = await sql`
+      SELECT 
+        id,
+        address,
+        alias,
+        tags,
+        ui_color,
+        twitter_handle,
+        telegram_channel,
+        streaming_channel,
+        image_data,
+        notes,
+        sol_balance,
+        last_balance_check,
+        is_active,
+        created_at
+      FROM tracked_wallets
+      ORDER BY created_at DESC
+    `;
+    
+    return result.map(row => ({
+      ...row,
+      tags: Array.isArray(row.tags) ? row.tags : (row.tags ? (row.tags as string).split(',').map(t => t.trim()) : [])
+    })) as TrackedWallet[];
+  } catch (error) {
+    console.error('Error fetching tracked wallets:', error);
+    throw error;
+  }
+}
 
-  if (error) {
+export async function getTrackedWalletByAddress(address: string): Promise<TrackedWallet | null> {
+  try {
+    const result = await sql`
+      SELECT *
+      FROM tracked_wallets
+      WHERE address = ${address}
+    `;
+    
+    if (result.length === 0) {
+      return null;
+    }
+    
+    const row = result[0];
+    return {
+      ...row,
+      tags: Array.isArray(row.tags) ? row.tags : (row.tags ? (row.tags as string).split(',').map(t => t.trim()) : [])
+    } as TrackedWallet;
+  } catch (error) {
+    console.error('Error fetching wallet by address:', error);
+    throw error;
+  }
+}
+
+export async function createTrackedWallet(wallet: Omit<TrackedWallet, 'id' | 'created_at'>): Promise<TrackedWallet> {
+  try {
+    const result = await sql`
+      INSERT INTO tracked_wallets (
+        address,
+        alias,
+        tags,
+        ui_color,
+        twitter_handle,
+        telegram_channel,
+        streaming_channel,
+        image_data,
+        notes,
+        is_active
+      ) VALUES (
+        ${wallet.address},
+        ${wallet.alias},
+        ${wallet.tags},
+        ${wallet.ui_color},
+        ${wallet.twitter_handle},
+        ${wallet.telegram_channel},
+        ${wallet.streaming_channel},
+        ${wallet.image_data},
+        ${wallet.notes},
+        ${wallet.is_active}
+      )
+      RETURNING *
+    `;
+    
+    const row = result[0];
+    return {
+      ...row,
+      tags: Array.isArray(row.tags) ? row.tags : (row.tags ? (row.tags as string).split(',').map(t => t.trim()) : [])
+    } as TrackedWallet;
+  } catch (error) {
+    console.error('Error creating tracked wallet:', error);
+    throw error;
+  }
+}
+
+export async function updateTrackedWallet(address: string, updates: Partial<TrackedWallet>): Promise<TrackedWallet | null> {
+  try {
+    // Filter out undefined values and system fields
+    const filteredUpdates = Object.entries(updates)
+      .filter(([key, value]) => value !== undefined && key !== 'address' && key !== 'id' && key !== 'created_at')
+      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+
+    if (Object.keys(filteredUpdates).length === 0) {
+      return null;
+    }
+
+    // Build the SET clause dynamically
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    for (const [key, value] of Object.entries(filteredUpdates)) {
+      setClauses.push(`${key} = $${paramIndex}`);
+      values.push(value);
+      paramIndex++;
+    }
+
+    // Add the address parameter
+    values.push(address);
+
+    const query = `
+      UPDATE tracked_wallets
+      SET ${setClauses.join(', ')}
+      WHERE address = $${paramIndex}
+      RETURNING *
+    `;
+
+    const result = await sql.query(query, values);
+    
+    if (result.length === 0) {
+      return null;
+    }
+    
+    const row = result[0];
+    return {
+      ...row,
+      tags: Array.isArray(row.tags) ? row.tags : (row.tags ? (row.tags as string).split(',').map(t => t.trim()) : [])
+    } as TrackedWallet;
+  } catch (error) {
+    console.error('Error updating tracked wallet:', error);
+    throw error;
+  }
+}
+
+export async function deleteTrackedWallet(address: string): Promise<boolean> {
+  try {
+    const result = await sql`
+      DELETE FROM tracked_wallets
+      WHERE address = ${address}
+      RETURNING id
+    `;
+    
+    return result.length > 0;
+  } catch (error) {
+    console.error('Error deleting tracked wallet:', error);
+    throw error;
+  }
+}
+
+export async function toggleWalletStatus(address: string): Promise<TrackedWallet | null> {
+  try {
+    const result = await sql`
+      UPDATE tracked_wallets
+      SET is_active = NOT is_active
+      WHERE address = ${address}
+      RETURNING *
+    `;
+    
+    if (result.length === 0) {
+      return null;
+    }
+    
+    const row = result[0];
+    return {
+      ...row,
+      tags: Array.isArray(row.tags) ? row.tags : (row.tags ? (row.tags as string).split(',').map(t => t.trim()) : [])
+    } as TrackedWallet;
+  } catch (error) {
+    console.error('Error toggling wallet status:', error);
+    throw error;
+  }
+}
+
+// Stats functions for dashboard
+export async function getActiveSignals() {
+  try {
+    const result = await sql`
+      SELECT * FROM trade_signals 
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      ORDER BY created_at DESC
+      LIMIT 50
+    `;
+    return result;
+  } catch (error) {
     console.error('Error fetching active signals:', error);
     return [];
   }
-
-  return data || [];
 }
 
-export async function getRecentTrades(limit: number = 20): Promise<WhaleTrade[]> {
-  const { data, error } = await supabase
-    .from('recent_whale_trades')
-    .select('*')
-    .limit(limit);
-
-  if (error) {
+export async function getRecentTrades(limit: number = 20) {
+  try {
+    const result = await sql`
+      SELECT * FROM whale_trades 
+      ORDER BY trade_timestamp DESC 
+      LIMIT ${limit}
+    `;
+    return result;
+  } catch (error) {
     console.error('Error fetching recent trades:', error);
     return [];
   }
-
-  return data || [];
 }
 
 export async function getStats() {
-  const [signalsResult, tradesResult, walletsResult] = await Promise.all([
-    supabase.from('trade_signals').select('id', { count: 'exact' }).eq('status', 'OPEN'),
-    supabase.from('whale_trades').select('id', { count: 'exact' }),
-    supabase.from('tracked_wallets').select('id', { count: 'exact' }).eq('is_active', true)
-  ]);
+  try {
+    const [walletCount, signalCount, tradeCount] = await Promise.all([
+      sql`SELECT COUNT(*) as count FROM tracked_wallets WHERE is_active = true`,
+      sql`SELECT COUNT(*) as count FROM trade_signals WHERE created_at > NOW() - INTERVAL '24 hours'`,
+      sql`SELECT COUNT(*) as count FROM whale_trades WHERE trade_timestamp > NOW() - INTERVAL '24 hours'`
+    ]);
 
-  return {
-    activeSignals: signalsResult.count || 0,
-    totalTrades: tradesResult.count || 0,
-    activeWallets: walletsResult.count || 0
-  };
+    return {
+      activeWallets: Number(walletCount[0].count),
+      signals24h: Number(signalCount[0].count),
+      trades24h: Number(tradeCount[0].count)
+    };
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    return {
+      activeWallets: 0,
+      signals24h: 0,
+      trades24h: 0
+    };
+  }
 }

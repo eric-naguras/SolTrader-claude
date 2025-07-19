@@ -1,90 +1,5 @@
 // Sonar Platform - Main JavaScript
 
-// Shared Wallet Cache Service - Singleton to prevent duplicate API calls
-window.WalletCache = (() => {
-    let cache = null;
-    let isLoading = false;
-    let loadPromise = null;
-    
-    return {
-        async getWallets() {
-            // Return cached data if available
-            if (cache) {
-                return cache;
-            }
-            
-            // If already loading, return the existing promise
-            if (isLoading && loadPromise) {
-                return loadPromise;
-            }
-            
-            // Start loading
-            isLoading = true;
-            loadPromise = this.loadWallets();
-            
-            try {
-                const wallets = await loadPromise;
-                cache = wallets;
-                return wallets;
-            } finally {
-                isLoading = false;
-                loadPromise = null;
-            }
-        },
-        
-        async loadWallets() {
-            const response = await fetch(`${window.CONFIG.API_URL}/api/wallets`, {
-                headers: {
-                    'X-API-Key': window.CONFIG.API_KEY
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Failed to load wallets: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            // API returns { wallets: [...] }, extract the wallets array
-            let wallets = [];
-            if (data && data.wallets && Array.isArray(data.wallets)) {
-                wallets = data.wallets;
-            } else if (Array.isArray(data)) {
-                wallets = data;
-            } else {
-                console.warn('Unexpected API response format:', data);
-                wallets = [];
-            }
-            
-            return wallets;
-        },
-        
-        // Update cache with new/modified wallet
-        updateWallet(wallet) {
-            if (cache) {
-                const index = cache.findIndex(w => w.address === wallet.address);
-                if (index >= 0) {
-                    cache[index] = wallet;
-                } else {
-                    cache.push(wallet);
-                }
-            }
-        },
-        
-        // Remove wallet from cache
-        removeWallet(address) {
-            if (cache) {
-                cache = cache.filter(w => w.address !== address);
-            }
-        },
-        
-        // Clear cache to force reload
-        clearCache() {
-            cache = null;
-        }
-    };
-})();
-
 // Configure HTMX to send API key with all requests
 document.addEventListener('DOMContentLoaded', function() {
     // Add API key to all HTMX requests
@@ -478,7 +393,7 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             
-            // Let API handle duplicate validation
+            // Note: Duplicate validation is handled by API on submission
             
             console.log('Address validation passed');
         },
@@ -552,27 +467,11 @@ document.addEventListener('alpine:init', () => {
                 
                 this.isValidating = true;
                 
-                // First, fetch the balance for the wallet
-                let balanceData = null;
-                try {
-                    const balanceResponse = await fetch(`${window.CONFIG.API_URL}/api/wallets/${this.address}/balance`, {
-                        method: 'POST',
-                        headers: {
-                            'X-API-Key': window.CONFIG.API_KEY
-                        }
-                    });
-                    
-                    if (balanceResponse.ok) {
-                        balanceData = await balanceResponse.json();
-                        console.log('Balance fetched:', balanceData);
-                    } else {
-                        console.warn('Failed to fetch balance, continuing without it');
-                    }
-                } catch (error) {
-                    console.warn('Error fetching balance:', error);
-                }
+                // Skip balance fetching for now - endpoint doesn't exist
+                // Balance will be fetched later by background services
+                console.log('Creating wallet without initial balance fetch');
                 
-                // Now create the wallet
+                // Create the wallet
             const response = await fetch(`${window.CONFIG.API_URL}/api/wallets`, {
                 method: 'POST',
                 headers: { 
@@ -589,9 +488,11 @@ document.addEventListener('alpine:init', () => {
                     streaming_channel: this.streaming_channel,
                     image_data: this.image_data,
                     notes: this.notes,
-                    // Include balance data if successfully fetched
-                    sol_balance: balanceData?.balance || null,
-                    last_balance_check: balanceData?.balance ? new Date().toISOString() : null
+                    // Balance will be fetched later by background services
+                    sol_balance: null,
+                    last_balance_check: null,
+                    // Set wallet as active by default
+                    is_active: true
                 })
             });
             
@@ -602,29 +503,24 @@ document.addEventListener('alpine:init', () => {
                 this.showForm = false;
                 this.resetForm();
                 
-                // Use the created wallet directly and update cache
+                // Use the created wallet directly
                 const newWallet = createdWallet.wallet;
                 
-                // Update the shared cache with the new wallet
-                window.WalletCache.updateWallet(newWallet);
+                // Refresh the wallets table to show the new wallet
+                htmx.trigger('#wallets-table', 'refresh');
                 
-                // Add to the wallet list display
-                if (window.addNewWalletToList) {
-                    window.addNewWalletToList(newWallet);
-                } else {
-                    // Fallback to refresh if function doesn't exist
-                    htmx.trigger('#wallets-table', 'refresh');
-                }
-                
-                // Update existingWallets array for duplicate checking
-                this.existingWallets.push(newWallet.address.toLowerCase());
-                
-                // Show success message with balance if available
-                const balanceText = balanceData?.balance !== null ? ` (${balanceData.balance.toFixed(3)} SOL)` : '';
-                showToast(`Wallet added: ${newWallet.alias}${balanceText}`, 'success');
+                // Show success message
+                showToast(`Wallet added: ${newWallet.alias}`, 'success');
             } else {
                 const error = await response.json();
-                showToast(error.error || 'Failed to add wallet', 'error');
+                
+                // Handle duplicate address error specially
+                if (response.status === 409) {
+                    this.addressError = error.error || 'This wallet address already exists';
+                    showToast(error.error || 'Wallet address already exists', 'error');
+                } else {
+                    showToast(error.error || 'Failed to add wallet', 'error');
+                }
             }
             
             this.isValidating = false;
@@ -929,8 +825,9 @@ if (window.location.pathname === '/' || window.location.pathname === '/dashboard
 
 // Edit wallet function
 window.editWallet = function(address) {
-    const wallet = window.walletsData[address];
-    if (!wallet) {
+    // Find the wallet row by ID
+    const walletRow = document.querySelector(`#wallet-row-${address}`);
+    if (!walletRow) {
         showToast('Wallet data not found', 'error');
         return;
     }
@@ -939,18 +836,18 @@ window.editWallet = function(address) {
     const modal = document.getElementById('edit-wallet-modal');
     const alpineComponent = Alpine.$data(modal.querySelector('[x-data]'));
     
-    // Populate form with wallet data
+    // Read data from attributes
     alpineComponent.editData = {
-        address: wallet.address,
-        alias: wallet.alias || '',
-        tags: wallet.tags ? wallet.tags.join(', ') : '',
-        ui_color: wallet.ui_color || '#4338ca',
-        twitter_handle: wallet.twitter_handle || '',
-        telegram_channel: wallet.telegram_channel || '',
-        streaming_channel: wallet.streaming_channel || '',
-        image_data: wallet.image_data || null,
-        notes: wallet.notes || '',
-        is_active: wallet.is_active !== false
+        address: address,
+        alias: walletRow.dataset.walletAlias || '',
+        tags: walletRow.dataset.walletTags || '',
+        ui_color: walletRow.dataset.walletColor || '#4338ca',
+        twitter_handle: walletRow.dataset.walletTwitter || '',
+        telegram_channel: walletRow.dataset.walletTelegram || '',
+        streaming_channel: walletRow.dataset.walletStreaming || '',
+        image_data: walletRow.dataset.walletImage || null,
+        notes: walletRow.dataset.walletNotes || '',
+        is_active: walletRow.dataset.walletActive === 'true'
     };
     
     // Clear file input
@@ -959,4 +856,32 @@ window.editWallet = function(address) {
     
     // Open modal
     modal.showModal();
+};
+
+// Delete wallet function
+window.deleteWallet = async function(address) {
+    if (!confirm('Are you sure you want to delete this wallet?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${window.CONFIG.API_URL}/api/wallets/${address}`, {
+            method: 'DELETE',
+            headers: {
+                'X-API-Key': window.CONFIG.API_KEY
+            }
+        });
+        
+        if (response.ok) {
+            // Refresh the wallets table
+            htmx.trigger('#wallets-table', 'refresh');
+            showToast('Wallet deleted successfully', 'success');
+        } else {
+            const error = await response.json();
+            showToast(error.error || 'Failed to delete wallet', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting wallet:', error);
+        showToast('Failed to delete wallet', 'error');
+    }
 };

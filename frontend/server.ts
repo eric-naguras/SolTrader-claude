@@ -7,9 +7,11 @@ import { walletsPage } from './src/templates/pages/wallets';
 import { tradesPage } from './src/templates/pages/trades';
 import { settingsPage } from './src/templates/pages/settings';
 import { getPartial } from './src/templates/registry';
+import { walletsTablePartial, walletsTableErrorPartial } from './src/templates/partials/wallets-table';
+import { walletRowPartial } from './src/templates/partials/wallet-row';
 
 // Import database functions
-import { getActiveSignals, getRecentTrades, getStats } from './src/lib/database';
+import { getActiveSignals, getRecentTrades, getStats, getTrackedWallets, getTrackedWalletByAddress, createTrackedWallet, updateTrackedWallet, deleteTrackedWallet, toggleWalletStatus } from './src/lib/database';
 
 const app = new Hono();
 
@@ -87,6 +89,112 @@ app.get('/api/trades', async (c) => {
 app.get('/api/stats', async (c) => {
   const stats = await getStats();
   return c.json(stats);
+});
+
+// Wallets API endpoints (only for mutations - GET handled by HTMX)
+
+app.post('/api/wallets', async (c) => {
+  try {
+    const walletData = await c.req.json();
+    
+    // Check if wallet already exists
+    const existingWallet = await getTrackedWalletByAddress(walletData.address);
+    if (existingWallet) {
+      return c.json({ error: 'A wallet with this address already exists' }, 409);
+    }
+    
+    const newWallet = await createTrackedWallet(walletData);
+    return c.json({ wallet: newWallet }, 201);
+  } catch (error) {
+    console.error('Error creating wallet:', error);
+    
+    // Handle database unique constraint violation
+    if (error instanceof Error && (error.message?.includes('unique constraint') || error.message?.includes('duplicate key'))) {
+      return c.json({ error: 'A wallet with this address already exists' }, 409);
+    }
+    
+    return c.json({ error: 'Failed to create wallet' }, 500);
+  }
+});
+
+app.put('/api/wallets/:address', async (c) => {
+  try {
+    const address = c.req.param('address');
+    const updates = await c.req.json();
+    const updatedWallet = await updateTrackedWallet(address, updates);
+    
+    if (!updatedWallet) {
+      return c.json({ error: 'Wallet not found' }, 404);
+    }
+    
+    return c.json(updatedWallet);
+  } catch (error) {
+    console.error('Error updating wallet:', error);
+    return c.json({ error: 'Failed to update wallet' }, 500);
+  }
+});
+
+app.delete('/api/wallets/:address', async (c) => {
+  try {
+    const address = c.req.param('address');
+    const deleted = await deleteTrackedWallet(address);
+    
+    if (!deleted) {
+      return c.json({ error: 'Wallet not found' }, 404);
+    }
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting wallet:', error);
+    return c.json({ error: 'Failed to delete wallet' }, 500);
+  }
+});
+
+app.patch('/api/wallets/:address/toggle', async (c) => {
+  try {
+    const address = c.req.param('address');
+    const updatedWallet = await toggleWalletStatus(address);
+    
+    if (!updatedWallet) {
+      return c.json({ error: 'Wallet not found' }, 404);
+    }
+    
+    return c.json(updatedWallet);
+  } catch (error) {
+    console.error('Error toggling wallet status:', error);
+    return c.json({ error: 'Failed to toggle wallet status' }, 500);
+  }
+});
+
+// HTMX endpoint for toggling wallet status - returns only the updated row
+app.patch('/htmx/wallets/:address/toggle', async (c) => {
+  try {
+    const address = c.req.param('address');
+    const updatedWallet = await toggleWalletStatus(address);
+    
+    if (!updatedWallet) {
+      return c.html('<div class="error">Wallet not found</div>', 404);
+    }
+    
+    // Return only the updated row HTML
+    const rowHtml = walletRowPartial(updatedWallet);
+    return c.html(rowHtml);
+  } catch (error) {
+    console.error('Error toggling wallet status:', error);
+    return c.html('<div class="error">Failed to toggle wallet status</div>', 500);
+  }
+});
+
+// HTMX endpoints for wallets - return HTML fragments
+app.get('/htmx/partials/wallets-table', async (c) => {
+  try {
+    const wallets = await getTrackedWallets();
+    const tableHtml = walletsTablePartial(wallets);
+    return c.html(tableHtml);
+  } catch (error) {
+    console.error('Error fetching wallets for HTMX:', error);
+    return c.html(walletsTableErrorPartial());
+  }
 });
 
 // Partial fragments

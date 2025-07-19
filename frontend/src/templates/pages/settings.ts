@@ -1,4 +1,4 @@
-export const settingsPage = () => `<section>
+export const settingsPage = () => /*html*/ `<section>
     <h1>Settings</h1>
     
     <!-- Tab Navigation -->

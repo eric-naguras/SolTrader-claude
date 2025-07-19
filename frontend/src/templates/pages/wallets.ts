@@ -1,9 +1,16 @@
-export const walletsPage = () => `<section x-data="walletForm" x-init="init()">
+export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="init()">
     <h1>Tracked Wallets</h1>
     
     <!-- Add Wallet Form -->
-    <details :open="showForm">
-        <summary role="button" @click="showForm = !showForm">Add New Wallet</summary>
+    <div>
+        <button type="button" 
+                @click="showForm = !showForm" 
+                :class="{ 'contrast': showForm }"
+                style="width: 100%; text-align: left; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+            <span>Add New Wallet</span>
+            <span x-text="showForm ? '▼' : '▶'"></span>
+        </button>
+        <div x-show="showForm" x-transition>
         <form @submit.prevent="submitForm">
             <div class="grid">
                 <div>
@@ -128,7 +135,8 @@ export const walletsPage = () => `<section x-data="walletForm" x-init="init()">
                 <button type="button" class="secondary" @click="showForm = false">Cancel</button>
             </div>
         </form>
-    </details>
+        </div>
+    </div>
 
     <!-- Wallets Table -->
     <div id="wallets-table" hx-get="/htmx/partials/wallets-table" hx-trigger="load, refresh">

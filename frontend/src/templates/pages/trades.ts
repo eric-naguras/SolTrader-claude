@@ -1,4 +1,4 @@
-export const tradesPage = () => `<section x-data="tradeManager">
+export const tradesPage = () => /*html*/ `<section x-data="tradeManager">
     <h1>Trade History</h1>
     
     <!-- Trade Filters -->

@@ -436,6 +436,24 @@ table {
     z-index: 1000;
 }
 
+.toast-error {
+    background-color: var(--pico-del-color);
+    border-color: var(--pico-del-color);
+    color: var(--pico-del-color-inverse);
+}
+
+.toast-success {
+    background-color: var(--pico-ins-color);
+    border-color: var(--pico-ins-color);
+    color: var(--pico-ins-color-inverse);
+}
+
+.toast-info {
+    background-color: var(--pico-primary-background);
+    border-color: var(--pico-primary-border);
+    color: var(--pico-primary-inverse);
+}
+
 @keyframes slideUp {
     from {
         opacity: 0;

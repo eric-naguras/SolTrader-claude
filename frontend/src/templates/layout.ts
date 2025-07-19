@@ -1,4 +1,4 @@
-export const layout = (content: string) => `<!DOCTYPE html>
+export const layout = (content: string) => /*html*/ `<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
@@ -7,7 +7,6 @@ export const layout = (content: string) => `<!DOCTYPE html>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <link rel="stylesheet" href="/css/app.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://unpkg.com/htmx.org/dist/ext/sse.js"></script>
     <script src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js" defer></script>
     <script src="/js/config.js"></script>
 </head>
@@ -28,23 +27,6 @@ export const layout = (content: string) => `<!DOCTYPE html>
         ${content}
     </main>
 
-    <!-- SSE Connection for real-time updates -->
-    <div id="sse-container" style="display: none;"></div>
-    
-    <script>
-    // Set up SSE connection with API key
-    document.addEventListener('DOMContentLoaded', function() {
-        const sseContainer = document.getElementById('sse-container');
-        const sseUrl = \`\${window.CONFIG.API_URL}/api/events?api_key=\${window.CONFIG.API_KEY}\`;
-        
-        sseContainer.setAttribute('hx-ext', 'sse');
-        sseContainer.setAttribute('sse-connect', sseUrl);
-        sseContainer.innerHTML = '<div sse-swap="message" hx-swap="none"></div>';
-        
-        // Process the element with HTMX
-        htmx.process(sseContainer);
-    });
-    </script>
 
     <script src="/js/app.js"></script>
 </body>

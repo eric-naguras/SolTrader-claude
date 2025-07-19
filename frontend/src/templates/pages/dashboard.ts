@@ -1,4 +1,4 @@
-export const dashboardPage = () => `<section>
+export const dashboardPage = () => /*html*/ `<section>
     <h1>Dashboard</h1>
     
     <!-- Stats Grid -->
