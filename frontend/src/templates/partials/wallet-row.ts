@@ -52,18 +52,20 @@ export function walletRowPartial(wallet: TrackedWallet): string {
       <td><span class="status-badge ${wallet.is_active ? 'active' : 'inactive'}">${wallet.is_active ? 'Active' : 'Inactive'}</span></td>
       <td>${age}d</td>
       <td>
-        <div class="grid" style="gap: 0.25rem; margin: 0;">
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
           <button class="outline" 
                   hx-patch="/htmx/wallets/${wallet.address}/toggle"
                   hx-target="#wallet-row-${wallet.address}"
                   hx-swap="outerHTML"
-                  style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
-            ${wallet.is_active ? 'Deactivate' : 'Activate'}
+                  style="padding: 0.25rem 0.5rem; font-size: 1.2rem; border-radius: 4px;"
+                  title="${wallet.is_active ? 'Deactivate' : 'Activate'}">
+            ${wallet.is_active ? '⏸️' : '▶️'}
           </button>
           <button class="secondary outline" 
                   onclick="deleteWallet('${wallet.address}')"
-                  style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
-            Delete
+                  style="padding: 0.25rem 0.5rem; font-size: 1.2rem; border-radius: 4px;"
+                  title="Delete wallet">
+            🗑️
           </button>
         </div>
       </td>
