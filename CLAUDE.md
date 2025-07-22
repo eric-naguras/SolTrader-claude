@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sonar Platform - A whale wallet intelligence system for Solana that monitors high-net-worth wallet activity to identify early memecoin investment opportunities. The system detects coordinated buying patterns and generates trading signals.
+SolTrader - A whale wallet intelligence system for Solana that monitors high-net-worth wallet activity to identify coordinated memecoin investment opportunities. The system detects coordinated buying patterns and generates trading signals.
 
 ## Goal
 
@@ -60,47 +60,59 @@ This module can also act as a trailing stop loss and trailing take profit actor.
 The signal analyzer should look at optimal stop-loss and take-profit strategies.
 
 ## MCP Servers to use
-Use context7 to search for documentation on Supabase, Neon, Helius, Solana and everything that you have trouble with getting things to work. Read more docs!
+Use context7 to search for documentation on Neon, Helius, Solana, Hono, HTMX and everything that you have trouble with getting things to work. Read more docs!
 Use the Neon mcp server to get info on tables, views, functions, etc. You may also update table schemas if needed.
 
 
 ## Architecture
 
-The platform uses a modular architecture with separate backend and frontend components:
+The platform uses a unified single-process architecture:
 
-### Frontend (`/frontend`)
-- **Stack**: HTMX + Alpine.js + Pico CSS (NOT a SPA)
-- **Server**: Bun-based with SSR support
+### Unified Server (`server.ts`)
+- **Framework**: Hono web framework (lightweight, fast)
+- **Frontend**: HTMX + Alpine.js + Pico CSS (NOT a SPA)
+- **Backend Services**: 4 coordinated services in same process
 - **Philosophy**: Server-side rendering, minimal client-side complexity
-- **No build step**: Direct serving of static assets
+- **Runtime**: Bun-first but Node.js compatible
 
 ## Development Commands
 
-### Frontend Commands
+### Unified Server Commands
 ```bash
-cd frontend
-npm run dev              # Bun development server with watch mode
-npm start                # Production server
-npm run build            # Build for Bun runtime
-npm run test             # Run tests with test database
+# Development with auto-reload
+bun run dev              # Unified server with watch mode
+
+# Production
+bun run start            # Production server  
+
+# Building
+bun run build            # Build for Bun runtime
+bun run build:node       # Build for Node.js runtime
+
+# Testing  
+bun test                 # Run tests with Bun
+npm run test             # Run tests (uses test database)
 npm run test:watch       # Tests in watch mode
+
+# Deployment
 npm run deploy           # Deploy to Cloudflare Workers
 ```
 
 ## Testing
 
-- **Frontend**: Bun test runner with database integration tests
+- **Framework**: Bun test runner with database integration tests
 - **Database Testing**: Uses Neon test branches or test database
-- Run a single test: Use `npm run test -- path/to/test.ts`
+- **Single Test**: Use `bun test path/to/test.ts` or `npm run test -- path/to/test.ts`
 
 ## Key Technical Decisions
 
-1. **Runtime Agnostic**: Avoid Node-specific APIs for broader deployment
-2. **Database-First**: Neon as single source of truth
-3. **Event-Driven**: Database triggers and Neon Realtime for Phase 1
-4. **TypeScript Strict**: Enforced type safety across codebase
-5. **HTMX Philosophy**: Server-side rendering, not a SPA
-6. **Modular Services**: Independent development and deployment
+1. **Unified Architecture**: Single process for simplicity and performance
+2. **Runtime Agnostic**: Avoid Node-specific APIs (Bun/Node.js/Workers compatible)
+3. **Database-First**: Neon PostgreSQL as single source of truth
+4. **Event-Driven**: Database triggers and real-time notifications
+5. **TypeScript Strict**: Enforced type safety across codebase
+6. **HTMX Philosophy**: Server-side rendering, not a SPA
+7. **Service Coordination**: All services managed by ServiceManager
 
 ## Database Schema
 
@@ -114,13 +126,13 @@ Core tables:
 ## Environment Variables
 
 Required:
-- `DATABASE_URL`: Neon connections string as URL
-- `HELIUS_API_KEY`: Blockchain data access
-- `API_SECRET`: API authentication
+- `DATABASE_URL`: Neon PostgreSQL connection string
+- `HELIUS_API_KEY`: Solana WebSocket and API access
 
 Optional:
-- `TELEGRAM_BOT_TOKEN` & `TELEGRAM_CHAT_ID`: Telegram alerts
-- `DISCORD_WEBHOOK_URL`: Discord alerts
+- `PORT`: Server port (default: 3000)
+- `ENABLE_LIVE_TRADING`: Enable real trading (default: false)
+- `LOG_*`: Configurable logging levels (CONNECTION, WALLET, TRADE, MULTI_WHALE, DEBUG)
 
 ## Code Quality Rules (CRITICAL)
 
@@ -139,9 +151,8 @@ Optional:
 ## MCP Servers
 
 Use these MCP servers when needed:
-- **context7**: For documentation on Neon, Neon, Helius, Solana
+- **context7**: For documentation on Neon, Helius, Solana, Hono, HTMX
 - **Neon MCP**: For database operations and schema updates
-- **Neon MCP**: For additional database operations
 
 ## Future Phases
 
