@@ -1,16 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "mcp__supabase__list_projects",
-      "mcp__supabase__list_tables",
-      "mcp__supabase__execute_sql",
-      "mcp__supabase__get_project",
-      "mcp__supabase__search_docs",
-      "mcp__supabase__apply_migration",
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
-      "mcp__supabase__list_migrations",
-      "mcp__supabase__list_extensions",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
       "mcp__neon__list_projects",
       "mcp__neon__get_database_tables",
       "mcp__neon__list_branch_computes",
