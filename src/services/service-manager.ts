@@ -1,11 +1,14 @@
 import { ENV } from '../lib/env.js';
 import { Logger } from '../lib/logger.js';
+import { getDatabase } from '../lib/database.js';
+import { messageBus } from '../lib/message-bus.js';
+import { Service, ServiceStatus } from '../lib/service-interface.js';
 import { WalletWatcher } from './wallet-watcher.js';
 import { PaperTrader } from './paper-trader.js';
 import { SignalAnalyzer } from './signal-analyzer.js';
 import { SignalTrader } from './signal-trader.js';
 
-interface ServiceStatus {
+interface ServiceManagerStatus {
   name: string;
   status: 'running' | 'stopped' | 'error';
   lastHeartbeat?: string;
@@ -13,22 +16,24 @@ interface ServiceStatus {
 }
 
 export class ServiceManager {
-  private services: Map<string, any> = new Map();
-  private serviceStatuses: Map<string, ServiceStatus> = new Map();
+  private services: Map<string, Service> = new Map();
+  private serviceStatuses: Map<string, ServiceManagerStatus> = new Map();
   private isShuttingDown = false;
   private logger: Logger;
 
   constructor() {
     this.logger = new Logger('service-manager');
     this.initializeServices();
+    this.loadLogConfiguration();
+    this.setupMessageBusListeners();
   }
 
   private initializeServices() {
-    // Initialize core modules based on CLAUDE.md goals
-    this.services.set('wallet-watcher', new WalletWatcher());
-    this.services.set('paper-trader', new PaperTrader());
-    this.services.set('signal-analyzer', new SignalAnalyzer());
-    this.services.set('signal-trader', new SignalTrader());
+    // Initialize core modules with MessageBus injection
+    this.services.set('wallet-watcher', new WalletWatcher(messageBus));
+    this.services.set('paper-trader', new PaperTrader(messageBus));
+    this.services.set('signal-analyzer', new SignalAnalyzer(messageBus));
+    this.services.set('signal-trader', new SignalTrader(messageBus));
 
     // Initialize service statuses
     for (const [name] of this.services) {
@@ -82,22 +87,25 @@ export class ServiceManager {
   private async startService(name: string) {
     const service = this.services.get(name);
     if (!service) {
-      this.logger.error(`Service ${name} not found`);
+      this.logger.error(`[ServiceManager] Service ${name} not found`);
       return;
     }
 
     try {
-      this.logger.system(`Starting ${name}...`);
+      this.logger.system(`[ServiceManager] Starting ${name}...`);
       await service.start();
       
+      // Get status from service interface
+      const serviceStatus = service.getStatus();
       this.serviceStatuses.set(name, {
         name,
-        status: 'running'
+        status: serviceStatus.running ? 'running' : 'stopped',
+        error: serviceStatus.error
       });
       
-      this.logger.system(`${name} started successfully`);
+      this.logger.system(`[ServiceManager] ${name} started successfully`);
     } catch (error) {
-      this.logger.error(`Failed to start ${name}:`, error);
+      this.logger.error(`[ServiceManager] Failed to start ${name}:`, error);
       this.serviceStatuses.set(name, {
         name,
         status: 'error',
@@ -134,22 +142,25 @@ export class ServiceManager {
 
   private async stopService(name: string) {
     const service = this.services.get(name);
-    if (!service || !service.stop) {
+    if (!service) {
       return;
     }
 
     try {
-      this.logger.system(`Stopping ${name}...`);
+      this.logger.system(`[ServiceManager] Stopping ${name}...`);
       await service.stop();
       
+      // Get final status from service
+      const serviceStatus = service.getStatus();
       this.serviceStatuses.set(name, {
         name,
-        status: 'stopped'
+        status: serviceStatus.running ? 'running' : 'stopped',
+        error: serviceStatus.error
       });
       
-      this.logger.system(`${name} stopped successfully`);
+      this.logger.system(`[ServiceManager] ${name} stopped successfully`);
     } catch (error) {
-      this.logger.error(`Error stopping ${name}:`, error);
+      this.logger.error(`[ServiceManager] Error stopping ${name}:`, error);
       this.serviceStatuses.set(name, {
         name,
         status: 'error',
@@ -162,13 +173,26 @@ export class ServiceManager {
     this.logger.system(`Restarting ${name}...`);
     await this.stopService(name);
     await this.startService(name);
+    
+    // Emit restart event
+    messageBus.publish('service_restarted', { serviceName: name });
   }
 
-  getServiceStatus(name: string): ServiceStatus | undefined {
+  getServiceStatus(name: string): ServiceManagerStatus | undefined {
     return this.serviceStatuses.get(name);
   }
 
-  getAllServiceStatuses(): ServiceStatus[] {
+  getAllServiceStatuses(): ServiceManagerStatus[] {
+    // Get real-time status from services
+    for (const [name, service] of this.services) {
+      const serviceStatus = service.getStatus();
+      this.serviceStatuses.set(name, {
+        name,
+        status: serviceStatus.running ? 'running' : 'stopped',
+        error: serviceStatus.error,
+        lastHeartbeat: serviceStatus.lastHeartbeat
+      });
+    }
     return Array.from(this.serviceStatuses.values());
   }
 
@@ -202,6 +226,7 @@ export class ServiceManager {
     if (signalTrader && signalTrader.enableTrading) {
       await signalTrader.enableTrading();
       this.logger.system('Live trading enabled');
+      messageBus.publish('trading_enabled', {});
     }
   }
 
@@ -210,6 +235,7 @@ export class ServiceManager {
     if (signalTrader && signalTrader.disableTrading) {
       await signalTrader.disableTrading();
       this.logger.system('Live trading disabled');
+      messageBus.publish('trading_disabled', {});
     }
   }
 
@@ -226,6 +252,49 @@ export class ServiceManager {
     if (signalAnalyzer && signalAnalyzer.triggerAnalysis) {
       await signalAnalyzer.triggerAnalysis();
       this.logger.system('Manual analysis triggered');
+      messageBus.publish('analysis_triggered', {});
+    }
+  }
+
+  private async loadLogConfiguration() {
+    try {
+      const db = await getDatabase();
+      const result = await db.query(
+        `SELECT log_categories FROM service_configs WHERE service_name = 'unified' LIMIT 1`
+      );
+      
+      if (result.rows.length > 0 && result.rows[0].log_categories) {
+        this.updateLogConfiguration(result.rows[0].log_categories);
+      }
+    } catch (error) {
+      this.logger.error('Failed to load log configuration:', error);
+    }
+  }
+
+  private setupMessageBusListeners() {
+    // Listen for configuration changes
+    messageBus.subscribe('logging_config_changed', (data) => {
+      this.logger.system('Received logging config change via message bus');
+      this.updateLogConfiguration(data.log_categories);
+    });
+
+    messageBus.subscribe('ui_config_changed', (data) => {
+      this.logger.system('Received UI config change via message bus');
+      // Store UI config for services that might need it
+      // For now, just log it
+    });
+  }
+
+  private updateLogConfiguration(logCategories: any) {
+    // Update logger configuration
+    this.logger.updateConfig(logCategories);
+    
+    // Update all service loggers
+    for (const [name, service] of this.services) {
+      if (service.logger && service.logger.updateConfig) {
+        service.logger.updateConfig(logCategories);
+        this.logger.system(`Updated log configuration for ${name}`);
+      }
     }
   }
 }

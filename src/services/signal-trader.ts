@@ -1,41 +1,55 @@
 import { database } from '../lib/database.js';
 import { Logger } from '../lib/logger.js';
+import { Service, ServiceStatus } from '../lib/service-interface.js';
+import { MessageBus } from '../lib/message-bus.js';
 
-export class SignalTrader {
+export class SignalTrader implements Service {
+  readonly name = 'SignalTrader';
+  
   private logger: Logger;
+  private messageBus: MessageBus;
   private isRunning: boolean = false;
   private liveTradingEnabled: boolean = false;
   private tradingInterval?: number;
+  private unsubscribers: (() => void)[] = [];
 
-  constructor() {
+  constructor(messageBus: MessageBus) {
+    this.messageBus = messageBus;
     this.logger = new Logger('signal-trader');
-    this.logger.system('Initialized signal trader (LIVE TRADING - DISABLED BY DEFAULT)');
+    this.logger.system('[SignalTrader] Initialized (LIVE TRADING - DISABLED BY DEFAULT)');
   }
 
-  async start() {
+  async start(): Promise<void> {
     try {
-      this.logger.system('Starting signal trader...');
+      this.logger.system('[SignalTrader] Starting...');
       this.isRunning = true;
+      
+      // Subscribe to message bus events
+      this.setupMessageBusListeners();
       
       // Live trading is disabled by default for safety
       this.liveTradingEnabled = false;
-      this.logger.system('Live trading is DISABLED - Use enableTrading() to activate');
+      this.logger.system('[SignalTrader] Live trading is DISABLED - Use enableTrading() to activate');
       
-      // Monitor signals every 30 seconds
+      // Monitor signals every 30 seconds (fallback)
       this.tradingInterval = setInterval(() => this.processSignals(), 30000) as any;
       
       // Update heartbeat periodically
       setInterval(() => this.updateHeartbeat(), 30000);
       
-      this.logger.system('Signal trader started successfully');
+      this.logger.system('[SignalTrader] Started successfully');
+      
+      // Publish service started event
+      this.messageBus.publish('service_started', { serviceName: this.name });
     } catch (error) {
-      this.logger.error('Failed to start signal trader:', error);
+      this.logger.error('[SignalTrader] Failed to start:', error);
+      this.isRunning = false;
       throw error;
     }
   }
 
-  async stop() {
-    this.logger.system('Stopping signal trader...');
+  async stop(): Promise<void> {
+    this.logger.system('[SignalTrader] Stopping...');
     this.isRunning = false;
     this.liveTradingEnabled = false;
     
@@ -44,19 +58,79 @@ export class SignalTrader {
       this.tradingInterval = undefined;
     }
     
-    await this.logger.cleanup();
+    // Unsubscribe from message bus events
+    this.unsubscribers.forEach(unsub => unsub());
+    this.unsubscribers = [];
+    
+    this.logger.system('[SignalTrader] Stopped');
+    
+    // Publish service stopped event
+    this.messageBus.publish('service_stopped', { serviceName: this.name });
+  }
+
+  getStatus(): ServiceStatus {
+    return {
+      running: this.isRunning,
+      lastHeartbeat: new Date().toISOString(),
+      metadata: {
+        liveTradingEnabled: this.liveTradingEnabled,
+        tradingInterval: this.tradingInterval ? 'active' : 'inactive'
+      }
+    };
+  }
+
+  private setupMessageBusListeners(): void {
+    // Listen for new signals from SignalAnalyzer
+    const newSignalHandler = async (data: any) => {
+      this.logger.system('[SignalTrader] Received new_signal event');
+      if (this.liveTradingEnabled) {
+        await this.handleNewSignal(data.signal);
+      } else {
+        this.logger.system('[SignalTrader] Live trading disabled, ignoring signal');
+      }
+    };
+
+    this.messageBus.subscribe('new_signal', newSignalHandler);
+    this.unsubscribers.push(() => this.messageBus.unsubscribe('new_signal', newSignalHandler));
+  }
+
+  // Handle new signal by creating real trade (if enabled)
+  private async handleNewSignal(signal: any) {
+    try {
+      this.logger.system(`[SignalTrader] Processing signal for real trade: ${signal.coin_address}`);
+      
+      // Default real trade amount (should be configurable)
+      const tradeAmountSol = 0.1; // Much smaller for real trading
+      
+      const trade = await this.createLiveTrade(signal.id, signal.coin_address, 1.0, tradeAmountSol);
+      
+      if (trade) {
+        this.logger.system(`[SignalTrader] Created live trade: ${trade.id}`);
+        
+        // Publish real trade event
+        this.messageBus.publish('real_trade_executed', { trade });
+      }
+    } catch (error) {
+      this.logger.error('[SignalTrader] Error handling new signal:', error);
+    }
   }
 
   // Enable live trading (must be called explicitly)
   async enableTrading() {
     this.liveTradingEnabled = true;
-    this.logger.system('🚨 LIVE TRADING ENABLED - Real trades will be executed!');
+    this.logger.system('[SignalTrader] 🚨 LIVE TRADING ENABLED - Real trades will be executed!');
+    
+    // Publish trading enabled event
+    this.messageBus.publish('trading_enabled', {});
   }
 
   // Disable live trading
   async disableTrading() {
     this.liveTradingEnabled = false;
-    this.logger.system('Live trading disabled - Only paper trades will be executed');
+    this.logger.system('[SignalTrader] Live trading disabled - Only paper trades will be executed');
+    
+    // Publish trading disabled event
+    this.messageBus.publish('trading_disabled', {});
   }
 
   // Process open signals

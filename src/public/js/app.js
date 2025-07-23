@@ -43,37 +43,87 @@ document.addEventListener('htmx:afterSwap', (event) => {
     }
 });
 
-// Handle SSE messages
-document.addEventListener('htmx:sseMessage', (event) => {
-    const data = JSON.parse(event.detail.data);
+// Vanilla EventSource for SSE - following CLAUDE.md architecture rules
+let evtSource = null;
+
+function initializeSSE() {
+    console.log('[SSE] Initializing EventSource connection...');
     
-    switch(data.type) {
-        case 'new_trade':
-            // Update trade feed if on dashboard
-            const tradeFeed = document.getElementById('trade-feed');
-            if (tradeFeed) {
-                htmx.ajax('GET', '/htmx/partials/trade-item', {
-                    target: tradeFeed,
-                    swap: 'afterbegin',
-                    values: data.trade
-                });
-            }
-            break;
-            
-        case 'new_signal':
-            // Show notification
-            showToast(`New signal: ${data.signal.coin_address}`, 'success');
-            
-            // Update signals if on dashboard
-            const signalsList = document.getElementById('signals-list');
-            if (signalsList) {
-                htmx.ajax('GET', '/htmx/partials/signal-item', {
-                    target: signalsList,
-                    swap: 'afterbegin',
-                    values: data.signal
-                });
-            }
-            break;
+    evtSource = new EventSource('/events');
+    
+    evtSource.addEventListener('open', () => {
+        console.log('[SSE] Connection opened');
+    });
+    
+    evtSource.addEventListener('error', (e) => {
+        console.error('[SSE] Connection error:', e);
+        if (evtSource.readyState === EventSource.CLOSED) {
+            console.log('[SSE] Connection closed, attempting to reconnect in 5 seconds...');
+            setTimeout(initializeSSE, 5000);
+        }
+    });
+    
+    evtSource.addEventListener('connected', (e) => {
+        const data = JSON.parse(e.data);
+        console.log('[SSE] Connected at:', data.timestamp);
+    });
+    
+    evtSource.addEventListener('heartbeat', (e) => {
+        console.log('[SSE] Heartbeat received');
+    });
+    
+    evtSource.addEventListener('new_trade', (e) => {
+        const data = JSON.parse(e.data);
+        console.log('[SSE] New trade event:', data);
+        
+        // Update trade feed if on dashboard
+        const tradeFeed = document.getElementById('trade-feed');
+        if (tradeFeed) {
+            htmx.trigger('#trade-feed > div', 'load');
+        }
+        
+        // Update trades table if on trades page
+        const tradesTable = document.getElementById('trades-table');
+        if (tradesTable) {
+            htmx.trigger('#trades-table', 'load');
+        }
+    });
+    
+    evtSource.addEventListener('new_signal', (e) => {
+        const data = JSON.parse(e.data);
+        console.log('[SSE] New signal event:', data);
+        
+        // Show notification
+        showToast(`New signal: ${data.signal.coin_address}`, 'success');
+        
+        // Update signals if on dashboard
+        const signalsList = document.getElementById('signals-list');
+        if (signalsList) {
+            htmx.trigger('#signals-list > div', 'load');
+        }
+    });
+    
+    evtSource.addEventListener('stats_updated', (e) => {
+        const data = JSON.parse(e.data);
+        console.log('[SSE] Stats updated event:', data);
+        
+        // Update dashboard stats
+        const dashboardStats = document.getElementById('dashboard-stats');
+        if (dashboardStats) {
+            htmx.trigger('#dashboard-stats', 'refresh');
+        }
+    });
+}
+
+// Initialize SSE when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    initializeSSE();
+});
+
+// Clean up SSE connection when page unloads
+window.addEventListener('beforeunload', () => {
+    if (evtSource) {
+        evtSource.close();
     }
 });
 
@@ -246,7 +296,7 @@ document.addEventListener('alpine:init', () => {
             this.validateEditTags();
         },
         
-        async updateWallet() {
+        updateWallet() {
             // Final validation before submit
             this.validateEditAll();
             
@@ -255,36 +305,11 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             
-            this.isEditValidating = true;
-            const response = await fetch(`${window.CONFIG.API_URL}/api/wallets/${this.editData.address}`, {
-                method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-API-Key': window.CONFIG.API_KEY
-                },
-                body: JSON.stringify({
-                    alias: this.editData.alias,
-                    tags: this.editData.tags.split(',').map(t => t.trim()).filter(t => t),
-                    ui_color: this.editData.ui_color,
-                    twitter_handle: this.editData.twitter_handle,
-                    telegram_channel: this.editData.telegram_channel,
-                    streaming_channel: this.editData.streaming_channel,
-                    image_data: this.editData.image_data,
-                    notes: this.editData.notes,
-                    is_active: this.editData.is_active
-                })
-            });
-            
-            if (response.ok) {
-                this.closeModal();
-                htmx.trigger('#wallets-table', 'refresh');
-                showToast('Wallet updated successfully', 'success');
-            } else {
-                const error = await response.json();
-                showToast(error.error || 'Failed to update wallet', 'error');
+            // Use HTMX to submit the form
+            const form = document.getElementById('edit-wallet-form');
+            if (form) {
+                htmx.trigger(form, 'submit');
             }
-            
-            this.isEditValidating = false;
         }
     }));
     
@@ -455,7 +480,7 @@ document.addEventListener('alpine:init', () => {
             this.validateTags();
         },
         
-        async submitForm() {
+        submitForm() {
             try {
                 // Final validation before submit
                 this.validateAll();
@@ -467,63 +492,16 @@ document.addEventListener('alpine:init', () => {
                 
                 this.isValidating = true;
                 
-                // Skip balance fetching for now - endpoint doesn't exist
-                // Balance will be fetched later by background services
-                console.log('Creating wallet without initial balance fetch');
-                
-                // Create the wallet
-            const response = await fetch(`${window.CONFIG.API_URL}/api/wallets`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-API-Key': window.CONFIG.API_KEY
-                },
-                body: JSON.stringify({
-                    address: this.address,
-                    alias: this.alias,
-                    tags: this.tags.split(',').map(t => t.trim()).filter(t => t),
-                    ui_color: this.ui_color,
-                    twitter_handle: this.twitter_handle,
-                    telegram_channel: this.telegram_channel,
-                    streaming_channel: this.streaming_channel,
-                    image_data: this.image_data,
-                    notes: this.notes,
-                    // Balance will be fetched later by background services
-                    sol_balance: null,
-                    last_balance_check: null,
-                    // Set wallet as active by default
-                    is_active: true
-                })
-            });
-            
-            if (response.ok) {
-                const createdWallet = await response.json();
-                
-                // Close form and reset
-                this.showForm = false;
-                this.resetForm();
-                
-                // Use the created wallet directly
-                const newWallet = createdWallet.wallet;
-                
-                // Refresh the wallets table to show the new wallet
-                htmx.trigger('#wallets-table', 'refresh');
-                
-                // Show success message
-                showToast(`Wallet added: ${newWallet.alias}`, 'success');
-            } else {
-                const error = await response.json();
-                
-                // Handle duplicate address error specially
-                if (response.status === 409) {
-                    this.addressError = error.error || 'This wallet address already exists';
-                    showToast(error.error || 'Wallet address already exists', 'error');
-                } else {
-                    showToast(error.error || 'Failed to add wallet', 'error');
+                // Use HTMX to submit the form
+                const form = document.getElementById('wallet-form');
+                if (form) {
+                    htmx.trigger(form, 'submit');
+                    // Reset form after successful submission will be handled by HTMX response
+                    this.showForm = false;
+                    this.resetForm();
                 }
-            }
-            
-            this.isValidating = false;
+                
+                this.isValidating = false;
             } catch (error) {
                 console.error('Error in submitForm:', error);
                 showToast('An error occurred while submitting the form', 'error');
@@ -548,247 +526,9 @@ document.addEventListener('alpine:init', () => {
         }
     }));
     
-    Alpine.data('loggingConfig', () => ({
-        config: {
-            connection: true,
-            wallet: true,
-            trade: true,
-            multiWhale: true,
-            transaction: false,
-            dataFlow: false,
-            health: true,
-            debug: false
-        },
-        lastSaved: '',
-        
-        async init() {
-            // Load current configuration
-            await this.loadConfig();
-        },
-        
-        async loadConfig() {
-            try {
-                const response = await fetch(`${window.CONFIG.API_URL}/api/settings/logging`, {
-                    headers: {
-                        'X-API-Key': window.CONFIG.API_KEY
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    this.config = data.log_categories || this.config;
-                }
-            } catch (error) {
-                console.error('Failed to load logging config:', error);
-            }
-        },
-        
-        async updateConfig() {
-            try {
-                const response = await fetch(`${window.CONFIG.API_URL}/api/settings/logging`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': window.CONFIG.API_KEY
-                    },
-                    body: JSON.stringify({ log_categories: this.config })
-                });
-                
-                if (response.ok) {
-                    this.lastSaved = new Date().toLocaleTimeString();
-                    showToast('Logging configuration updated', 'success');
-                } else {
-                    showToast('Failed to update configuration', 'error');
-                }
-            } catch (error) {
-                console.error('Failed to update config:', error);
-                showToast('Failed to update configuration', 'error');
-            }
-        },
-        
-        async savePreset() {
-            const name = prompt('Enter preset name:');
-            if (name) {
-                // TODO: Implement preset saving
-                showToast('Preset feature coming soon', 'info');
-            }
-        },
-        
-        resetDefaults() {
-            this.config = {
-                connection: true,
-                wallet: true,
-                trade: true,
-                multiWhale: true,
-                transaction: false,
-                dataFlow: false,
-                health: true,
-                debug: false
-            };
-            this.updateConfig();
-        }
-    }));
+    // Logging config is now handled by HTMX, no Alpine.js needed
     
-    Alpine.data('uiRefreshConfig', () => {
-        return {
-            config: {
-                balance_interval_minutes: 5,
-                auto_refresh_enabled: true,
-                pause_on_activity: true,
-                show_refresh_indicators: true
-            },
-        
-        // Validation state
-        balanceIntervalError: '',
-        isLoading: false,
-        lastSaved: '',
-        nextBalanceRefresh: '',
-        
-        // Timer for next refresh calculation
-        nextRefreshTimer: null,
-        
-        init() {
-            this.loadConfig();
-            this.updateNextRefreshDisplay();
-        },
-        
-        loadConfig() {
-            const self = this;
-            fetch(`${window.CONFIG.API_URL}/api/settings/ui`, {
-                headers: {
-                    'X-API-Key': window.CONFIG.API_KEY
-                }
-            })
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
-                }
-                throw new Error('Failed to load config');
-            })
-            .then(data => {
-                self.config = data.ui_refresh_config || self.config;
-                
-                // Notify wallets table about config change
-                if (window.updateRefreshConfig) {
-                    window.updateRefreshConfig(self.config);
-                }
-            })
-            .catch(error => {
-                console.error('Failed to load UI refresh config:', error);
-            });
-        },
-        
-        get isFormValid() {
-            return this.config.balance_interval_minutes >= 1 && 
-                   this.config.balance_interval_minutes <= 60 &&
-                   !this.balanceIntervalError;
-        },
-        
-        validateBalanceInterval() {
-            this.balanceIntervalError = '';
-            
-            if (this.config.balance_interval_minutes < 1 || this.config.balance_interval_minutes > 60) {
-                this.balanceIntervalError = 'Must be between 1 and 60 minutes';
-                return;
-            }
-        },
-        
-        validateAll() {
-            this.validateBalanceInterval();
-        },
-        
-        updateConfig() {
-            this.validateAll();
-            
-            if (!this.isFormValid) {
-                showToast('Please fix validation errors before saving', 'error');
-                return;
-            }
-            
-            this.isLoading = true;
-            
-            const self = this;
-            fetch(`${window.CONFIG.API_URL}/api/settings/ui`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': window.CONFIG.API_KEY
-                },
-                body: JSON.stringify({ ui_refresh_config: this.config })
-            })
-            .then(response => {
-                if (response.ok) {
-                    self.lastSaved = new Date().toLocaleTimeString();
-                    showToast('UI refresh settings updated', 'success');
-                    
-                    // Notify wallets table about config change
-                    if (window.updateRefreshConfig) {
-                        window.updateRefreshConfig(self.config);
-                    }
-                    
-                    self.updateNextRefreshDisplay();
-                } else {
-                    return response.json().then(error => {
-                        showToast(error.error || 'Failed to update settings', 'error');
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Failed to update config:', error);
-                showToast('Failed to update settings', 'error');
-            })
-            .finally(() => {
-                self.isLoading = false;
-            });
-        },
-        
-        resetDefaults() {
-            this.config = {
-                balance_interval_minutes: 5,
-                auto_refresh_enabled: true,
-                pause_on_activity: true,
-                show_refresh_indicators: true
-            };
-            this.updateConfig();
-        },
-        
-        updateNextRefreshDisplay() {
-            if (this.nextRefreshTimer) {
-                clearInterval(this.nextRefreshTimer);
-            }
-            
-            if (!this.config.auto_refresh_enabled) {
-                this.nextBalanceRefresh = 'Auto-refresh disabled';
-                return;
-            }
-            
-            // Calculate next refresh time
-            const nextRefresh = new Date();
-            nextRefresh.setMinutes(nextRefresh.getMinutes() + this.config.balance_interval_minutes);
-            
-            const updateDisplay = () => {
-                const now = new Date();
-                const diff = nextRefresh - now;
-                
-                if (diff <= 0) {
-                    this.nextBalanceRefresh = 'Refreshing now...';
-                    return;
-                }
-                
-                const minutes = Math.floor(diff / 60000);
-                const seconds = Math.floor((diff % 60000) / 1000);
-                
-                if (minutes > 0) {
-                    this.nextBalanceRefresh = `${minutes}m ${seconds}s`;
-                } else {
-                    this.nextBalanceRefresh = `${seconds}s`;
-                }
-            };
-            
-            updateDisplay();
-            this.nextRefreshTimer = setInterval(updateDisplay, 1000);
-        }
-    }});
+    // UI settings are now handled by HTMX, no Alpine.js needed
     
     Alpine.data('tagFilter', () => ({
         showPreview: false,
@@ -896,11 +636,11 @@ document.addEventListener('alpine:init', () => {
         async closePosition(id) {
             if (!confirm('Are you sure you want to close this position?')) return;
             
-            const response = await fetch(`${window.CONFIG.API_URL}/api/trades/${id}/close`, {
+            const response = await fetch(`/api/trades/${id}/close`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'X-API-Key': window.CONFIG.API_KEY
+                    'X-API-Key': window.CONFIG?.API_KEY || 'test-api-key'
                 },
                 body: JSON.stringify({
                     exitReason: 'Manual close via UI'
@@ -956,34 +696,24 @@ window.editWallet = function(address) {
     const fileInput = document.getElementById('edit-image');
     if (fileInput) fileInput.value = '';
     
+    // Set the form action URL
+    const editForm = document.getElementById('edit-wallet-form');
+    if (editForm) {
+        editForm.setAttribute('hx-put', `/htmx/wallets/${address}`);
+    }
+    
     // Open modal
     modal.showModal();
 };
 
 // Delete wallet function
-window.deleteWallet = async function(address) {
+window.deleteWallet = function(address) {
     if (!confirm('Are you sure you want to delete this wallet?')) {
         return;
     }
     
-    try {
-        const response = await fetch(`${window.CONFIG.API_URL}/api/wallets/${address}`, {
-            method: 'DELETE',
-            headers: {
-                'X-API-Key': window.CONFIG.API_KEY
-            }
-        });
-        
-        if (response.ok) {
-            // Refresh the wallets table
-            htmx.trigger('#wallets-table', 'refresh');
-            showToast('Wallet deleted successfully', 'success');
-        } else {
-            const error = await response.json();
-            showToast(error.error || 'Failed to delete wallet', 'error');
-        }
-    } catch (error) {
-        console.error('Error deleting wallet:', error);
-        showToast('Failed to delete wallet', 'error');
-    }
+    // Use HTMX to send delete request
+    htmx.ajax('DELETE', `/htmx/wallets/${address}`, {
+        target: '#toast-container'
+    });
 };

@@ -41,12 +41,86 @@ export class SignalAnalyzer {
     await this.logger.cleanup();
   }
 
-  // Analyze recent trades for signal generation
+  // Event-driven analysis triggered by new trades
+  private async runTradeAnalysis(trade: any) {
+    if (!this.isRunning) return;
+
+    try {
+      this.logger.system(`[SignalAnalyzer] Analyzing new trade: ${trade.trade_type} ${trade.coin_address}`);
+      
+      // Only analyze BUY trades for signal generation  
+      if (trade.trade_type === 'BUY') {
+        await this.checkForMultiWhaleSignal(trade.coin_address);
+      }
+    } catch (error) {
+      this.logger.error('[SignalAnalyzer] Error in trade analysis:', error);
+    }
+  }
+
+  // Check for multi-whale signal on specific token
+  private async checkForMultiWhaleSignal(coinAddress: string) {
+    try {
+      // Get signal configuration
+      const config = await database.getSignalConfig();
+      const minWhales = config?.min_whales || 3;
+      const timeWindowHours = config?.time_window_hours || 1;
+      const minTradeAmount = config?.min_trade_amount_sol || 0.5;
+
+      // Check if this token already has a recent signal
+      const hasRecent = await this.hasRecentSignal(coinAddress, timeWindowHours);
+      if (hasRecent) {
+        this.logger.system(`[SignalAnalyzer] Token ${coinAddress} already has recent signal, skipping`);
+        return;
+      }
+
+      // Get whale activity for this specific token
+      const tokenActivity = await this.getTokenWhaleActivity(coinAddress, timeWindowHours, minTradeAmount);
+      
+      if (tokenActivity && tokenActivity.whale_count >= minWhales) {
+        this.logger.system(`[SignalAnalyzer] Creating signal for ${coinAddress}: ${tokenActivity.whale_count} whales`);
+        await this.createTradeSignal(tokenActivity, minWhales);
+      }
+    } catch (error) {
+      this.logger.error('[SignalAnalyzer] Error checking for multi-whale signal:', error);
+    }
+  }
+
+  // Get whale activity for a specific token
+  private async getTokenWhaleActivity(coinAddress: string, timeWindowHours: number, minTradeAmount: number) {
+    try {
+      const since = new Date();
+      since.setHours(since.getHours() - timeWindowHours);
+
+      const query = `
+        SELECT 
+          coin_address,
+          COUNT(DISTINCT wallet_address) as whale_count,
+          SUM(sol_amount) as total_volume,
+          MIN(trade_timestamp) as first_trade,
+          MAX(trade_timestamp) as last_trade,
+          string_agg(DISTINCT wallet_address, ',') as wallets
+        FROM whale_trades 
+        WHERE trade_type = 'BUY' 
+          AND coin_address = $1
+          AND trade_timestamp >= $2 
+          AND sol_amount >= $3
+        GROUP BY coin_address
+      `;
+
+      const results = await database.query(query, [coinAddress, since.toISOString(), minTradeAmount]);
+      return results.length > 0 ? results[0] : null;
+    } catch (error) {
+      this.logger.error('[SignalAnalyzer] Error getting token whale activity:', error);
+      return null;
+    }
+  }
+
+  // Analyze recent trades for signal generation (periodic fallback)
   async runPeriodicAnalysis() {
     if (!this.isRunning) return;
 
     try {
-      this.logger.system('Running periodic trade analysis...');
+      this.logger.system('[SignalAnalyzer] Running periodic trade analysis...');
       
       // Get signal configuration
       const config = await database.getSignalConfig();
@@ -149,7 +223,11 @@ export class SignalAnalyzer {
         }
       });
 
-      this.logger.system(`Created signal for ${tokenData.coin_address.substring(0, 8)}... (${tokenData.whale_count} whales, ${tokenData.total_volume} SOL)`);
+      this.logger.system(`[SignalAnalyzer] Created signal for ${tokenData.coin_address.substring(0, 8)}... (${tokenData.whale_count} whales, ${tokenData.total_volume} SOL)`);
+      
+      // Publish new signal event to message bus
+      this.messageBus.publish('new_signal', { signal });
+      
       return signal;
     } catch (error) {
       this.logger.error('Error creating trade signal:', error);

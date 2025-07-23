@@ -2,11 +2,16 @@ import { Helius } from 'helius-sdk';
 import { database } from '../lib/database.js';
 import { Logger } from '../lib/logger.js';
 import { ENV } from '../lib/env.js';
+import { Service, ServiceStatus } from '../lib/service-interface.js';
+import { MessageBus } from '../lib/message-bus.js';
 import WebSocket from 'ws';
 
-export class WalletWatcher {
+export class WalletWatcher implements Service {
+  readonly name = 'WalletWatcher';
+  
   private helius: Helius;
   private logger: Logger;
+  private messageBus: MessageBus;
   private trackedWallets: Map<string, any> = new Map();
   private ws: WebSocket | null = null;
   private reconnectInterval: number = 1000;
@@ -16,21 +21,28 @@ export class WalletWatcher {
   private isShuttingDown: boolean = false;
   private reconnectTimeout?: number;
   private multiWhalePositions: Map<string, Set<string>> = new Map();
+  private isRunning: boolean = false;
+  private unsubscribers: (() => void)[] = [];
 
-  constructor() {
+  constructor(messageBus: MessageBus) {
     const heliusApiKey = ENV.HELIUS_API_KEY;
     if (!heliusApiKey) {
       throw new Error('HELIUS_API_KEY environment variable is required');
     }
 
+    this.messageBus = messageBus;
     this.helius = new Helius(heliusApiKey);
     this.logger = new Logger('wallet-watcher');
-    this.logger.system('Initialized wallet watcher');
+    this.logger.system('[WalletWatcher] Initialized');
   }
 
-  async start() {
+  async start(): Promise<void> {
     try {
-      this.logger.system('Starting wallet watcher...');
+      this.logger.system('[WalletWatcher] Starting...');
+      this.isShuttingDown = false;
+      
+      // Subscribe to message bus events
+      this.setupMessageBusListeners();
       
       // Load tracked wallets
       await this.loadTrackedWallets();
@@ -39,17 +51,83 @@ export class WalletWatcher {
       if (this.trackedWallets.size > 0) {
         await this.setupWebSocket();
       } else {
-        this.logger.wallet('No active wallets to track. Waiting for wallets to be added...');
+        this.logger.wallet('[WalletWatcher] No active wallets to track. Waiting for wallets to be added...');
       }
       
       // Update heartbeat periodically
       setInterval(() => this.updateHeartbeat(), 30000);
       
-      this.logger.system('Wallet watcher started successfully');
+      this.isRunning = true;
+      this.logger.system('[WalletWatcher] Started successfully');
+      
+      // Publish service started event
+      this.messageBus.publish('service_started', { serviceName: this.name });
     } catch (error) {
-      this.logger.error('Failed to start wallet watcher:', error);
+      this.logger.error('[WalletWatcher] Failed to start:', error);
+      this.isRunning = false;
       throw error;
     }
+  }
+
+  async stop(): Promise<void> {
+    this.logger.system('[WalletWatcher] Stopping...');
+    this.isShuttingDown = true;
+    this.isRunning = false;
+
+    // Clean up WebSocket connection
+    if (this.ws) {
+      this.ws.removeAllListeners();
+      this.ws.close();
+      this.ws = null;
+    }
+
+    // Clear intervals
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = undefined;
+    }
+
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = undefined;
+    }
+
+    // Unsubscribe from message bus events
+    this.unsubscribers.forEach(unsub => unsub());
+    this.unsubscribers = [];
+
+    this.logger.system('[WalletWatcher] Stopped');
+    
+    // Publish service stopped event
+    this.messageBus.publish('service_stopped', { serviceName: this.name });
+  }
+
+  getStatus(): ServiceStatus {
+    return {
+      running: this.isRunning,
+      lastHeartbeat: new Date().toISOString(),
+      metadata: {
+        trackedWallets: this.trackedWallets.size,
+        websocketConnected: this.ws?.readyState === WebSocket.OPEN,
+        reconnectAttempts: this.reconnectAttempts
+      }
+    };
+  }
+
+  private setupMessageBusListeners(): void {
+    // Listen for wallet updates from the frontend
+    const walletUpdatedHandler = async (data: any) => {
+      this.logger.wallet('[WalletWatcher] Received wallet_updated event');
+      await this.loadTrackedWallets();
+      
+      // Reconnect WebSocket with new wallet list
+      if (this.isRunning && !this.isShuttingDown) {
+        await this.setupWebSocket();
+      }
+    };
+
+    this.messageBus.subscribe('wallet_updated', walletUpdatedHandler);
+    this.unsubscribers.push(() => this.messageBus.unsubscribe('wallet_updated', walletUpdatedHandler));
   }
 
   private async loadTrackedWallets() {
@@ -371,6 +449,11 @@ export class WalletWatcher {
       if (trade) {
         const walletName = wallet.alias || wallet.address.slice(0, 8) + '...';
         const tokenDisplay = tradeData.tokenAddress.substring(0, 8) + '...';
+        
+        this.logger.trade(`[WalletWatcher] Recorded ${tradeData.tradeType} trade: ${walletName} -> ${tokenDisplay} (${tradeData.solAmount} SOL)`);
+        
+        // Publish new trade event to message bus
+        this.messageBus.publish('new_trade', { trade });
         
         if (tradeData.tradeType === 'BUY') {
           this.logger.trade.enter(walletName, tokenDisplay, tradeData.solAmount);

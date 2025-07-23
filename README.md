@@ -172,3 +172,77 @@ psql $DATABASE_URL -f migrations/002_wallet_data.sql
 - **[HTMX](https://htmx.org)** - Server-side rendered interactivity
 - **[Neon Database](https://neon.tech)** - Serverless PostgreSQL
 - **[Helius](https://helius.xyz)** - Solana API and WebSocket
+
+# Architecture Overview
+
+## Core Technologies
+- **Bun**: Runtime and package manager (native TypeScript support, no build step)
+- **Hono.js**: Lightweight web framework
+- **HTMX**: HTML-first approach for dynamic interactions
+- **SSE (Server-Sent Events)**: Real-time server-to-client communication
+
+## Architectural Patterns
+
+### 1. Message Bus Pattern
+A central publish/subscribe system for decoupled service communication:
+```typescript
+// Publishing events
+messageBus.publish('config.changed', { key: 'value' });
+
+// Subscribing to events
+const unsubscribe = messageBus.subscribe('config.changed', (data) => {
+  // Handle event
+});
+```
+
+**Benefits:**
+- Services don't need direct references to each other
+- Easy to add new services without modifying existing code
+- Clear event flow for debugging
+
+### 2. Service Architecture
+Services implement a standard interface and lifecycle:
+```typescript
+interface Service {
+  name: string;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  getStatus(): ServiceStatus;
+}
+```
+
+**Service Manager** orchestrates all services:
+- Registers and manages service lifecycle
+- Provides health monitoring
+- Handles graceful shutdown
+
+### 3. Frontend Architecture (HTMX + SSE Hybrid)
+- **HTMX**: Handles user interactions (forms, buttons) with declarative attributes
+- **Vanilla JS + SSE**: Manages real-time updates for better compatibility
+- **No build step**: Direct HTML/JS served by the server
+
+```html
+<!-- HTMX for user actions -->
+<button hx-post="/api/action" hx-trigger="click">Click Me</button>
+
+<!-- Vanilla JS for SSE -->
+<script>
+const evtSource = new EventSource('/api/sse');
+evtSource.addEventListener('update', (e) => {
+  document.getElementById('display').textContent = e.data;
+});
+</script>
+```
+
+## Data Flow
+1. **User Action** → HTMX → HTTP POST → Server Handler
+2. **Server Handler** → Message Bus → Service(s)
+3. **Service Processing** → Message Bus → SSE Handler
+4. **SSE Handler** → EventSource → DOM Update
+
+## Key Principles
+- **Separation of Concerns**: Each service has a single responsibility
+- **Event-Driven**: Services communicate through events, not direct calls
+- **Stateless HTTP**: Use SSE for server-initiated updates
+- **Progressive Enhancement**: Works without JavaScript, enhanced with HTMX/SSE
+- **Extensive Logging**: Every component logs its actions for debugging

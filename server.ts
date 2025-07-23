@@ -1,5 +1,6 @@
-import { Hono } from 'hono';
+import { Hono, Context } from 'hono';
 import { ENV } from './src/lib/env.js';
+import { messageBus } from './src/lib/message-bus.js';
 import ServiceManager from './src/services/service-manager.js';
 
 // Import template functions
@@ -27,8 +28,126 @@ import {
 
 const app = new Hono();
 
+// Add CORS middleware for API endpoints
+app.use('*', async (c, next) => {
+  c.header('Access-Control-Allow-Origin', '*');
+  c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
+  
+  if (c.req.method === 'OPTIONS') {
+    return c.text('', 200);
+  }
+  
+  await next();
+});
+
 // Initialize services
 const serviceManager = new ServiceManager();
+
+// SSE endpoint for real-time updates - using ReadableStream for Bun compatibility
+app.get('/events', (c: Context) => {
+  console.log('[Server] New SSE connection established');
+  
+  const encoder = new TextEncoder();
+  let eventId = 0;
+  const unsubscribers: (() => void)[] = [];
+  
+  const stream = new ReadableStream({
+    start(controller) {
+      // Set up message bus listeners for this client
+      const tradeHandler = (data: any) => {
+        const msg = `id: ${eventId++}\nevent: new_trade\ndata: ${JSON.stringify({
+          type: 'new_trade',
+          trade: data.trade,
+          timestamp: new Date().toISOString()
+        })}\n\n`;
+        try {
+          controller.enqueue(encoder.encode(msg));
+        } catch (error) {
+          console.log('[Server] Failed to send trade event to SSE client');
+        }
+      };
+
+      const signalHandler = (data: any) => {
+        const msg = `id: ${eventId++}\nevent: new_signal\ndata: ${JSON.stringify({
+          type: 'new_signal',
+          signal: data.signal,
+          timestamp: new Date().toISOString()
+        })}\n\n`;
+        try {
+          controller.enqueue(encoder.encode(msg));
+        } catch (error) {
+          console.log('[Server] Failed to send signal event to SSE client');
+        }
+      };
+
+      const statsHandler = (data: any) => {
+        const msg = `id: ${eventId++}\nevent: stats_updated\ndata: ${JSON.stringify({
+          type: 'stats_updated',
+          stats: data.stats,
+          timestamp: new Date().toISOString()
+        })}\n\n`;
+        try {
+          controller.enqueue(encoder.encode(msg));
+        } catch (error) {
+          console.log('[Server] Failed to send stats event to SSE client');
+        }
+      };
+
+      // Subscribe to message bus events
+      messageBus.subscribe('new_trade', tradeHandler);
+      messageBus.subscribe('new_signal', signalHandler);  
+      messageBus.subscribe('stats_updated', statsHandler);
+      
+      // Store unsubscribers for cleanup
+      unsubscribers.push(() => messageBus.unsubscribe('new_trade', tradeHandler));
+      unsubscribers.push(() => messageBus.unsubscribe('new_signal', signalHandler));
+      unsubscribers.push(() => messageBus.unsubscribe('stats_updated', statsHandler));
+
+      // Send initial connection event
+      const initialMsg = `id: ${eventId++}\nevent: connected\ndata: ${JSON.stringify({
+        type: 'connected',
+        timestamp: new Date().toISOString()
+      })}\n\n`;
+      controller.enqueue(encoder.encode(initialMsg));
+
+      // Keep connection alive with periodic heartbeat
+      const heartbeatInterval = setInterval(() => {
+        const heartbeatMsg = `id: ${eventId++}\nevent: heartbeat\ndata: ${JSON.stringify({
+          type: 'heartbeat',
+          timestamp: new Date().toISOString()
+        })}\n\n`;
+        try {
+          controller.enqueue(encoder.encode(heartbeatMsg));
+        } catch (error) {
+          // Client disconnected, clean up
+          clearInterval(heartbeatInterval);
+          unsubscribers.forEach(unsub => unsub());
+          console.log('[Server] SSE client disconnected during heartbeat');
+        }
+      }, 30000); // 30 second heartbeat
+      
+      // Store interval for cleanup
+      unsubscribers.push(() => clearInterval(heartbeatInterval));
+    },
+    
+    cancel() {
+      // Clean up when connection is closed
+      unsubscribers.forEach(unsub => unsub());
+      console.log('[Server] SSE client disconnected');
+    }
+  });
+  
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control',
+    },
+  });
+});
 
 // Runtime-specific static file serving
 async function setupStaticFiles() {
@@ -51,99 +170,612 @@ async function setupStaticFiles() {
 }
 
 // Helper function to serve full page with content
-function servePage(c: any, pageContent: string) {
+function servePage(c: Context, pageContent: string) {
   const html = layout(pageContent);
   return c.html(html);
 }
 
 // Root route - special case with initial load
-app.get('/', (c) => {
+app.get('/', (c: Context) => {
   return c.html(layoutWithInitialLoad());
 });
 
 // Serve pages (both direct access and HTMX)
-app.get('/wallets', (c) => {
+app.get('/wallets', (c: Context) => {
   return servePage(c, walletsPage());
 });
 
-app.get('/trades', (c) => {
+app.get('/trades', (c: Context) => {
   return servePage(c, tradesPage());
 });
 
-app.get('/settings', (c) => {
+app.get('/settings', (c: Context) => {
   return servePage(c, settingsPage());
 });
 
 // HTMX fragments (for navigation without full page reload)
-app.get('/htmx/dashboard', (c) => {
+app.get('/htmx/dashboard', (c: Context) => {
   return c.html(dashboardPage());
 });
 
-app.get('/htmx/wallets', (c) => {
+app.get('/htmx/wallets', (c: Context) => {
   return c.html(walletsPage());
 });
 
-app.get('/htmx/trades', (c) => {
+app.get('/htmx/trades', (c: Context) => {
   return c.html(tradesPage());
 });
 
-app.get('/htmx/settings', (c) => {
+app.get('/htmx/settings', (c: Context) => {
   return c.html(settingsPage());
 });
 
-// API endpoints for database data
-app.get('/api/signals', async (c) => {
-  const signals = await getActiveSignals();
-  return c.json(signals);
-});
-
-app.get('/api/trades', async (c) => {
-  const limit = Number(c.req.query('limit')) || 20;
-  const trades = await getRecentTrades(limit);
-  return c.json(trades);
-});
-
-app.get('/api/stats', async (c) => {
-  const stats = await getStats();
-  return c.json(stats);
-});
-
-// Service management endpoints
-app.get('/api/services/status', async (c) => {
-  const statuses = serviceManager.getAllServiceStatuses();
-  return c.json(statuses);
-});
-
-app.post('/api/services/:service/restart', async (c) => {
-  const serviceName = c.req.param('service');
-  await serviceManager.restartService(serviceName);
-  return c.json({ success: true, message: `Service ${serviceName} restarted` });
-});
-
-app.post('/api/trading/enable', async (c) => {
-  await serviceManager.enableLiveTrading();
-  return c.json({ success: true, message: 'Live trading enabled' });
-});
-
-app.post('/api/trading/disable', async (c) => {
-  await serviceManager.disableLiveTrading();
-  return c.json({ success: true, message: 'Live trading disabled' });
-});
-
-app.post('/api/analysis/trigger', async (c) => {
-  await serviceManager.triggerManualAnalysis();
-  return c.json({ success: true, message: 'Analysis triggered' });
-});
-
-// Wallets API endpoints (only for mutations - GET handled by HTMX)
-app.post('/api/wallets', async (c) => {
+// HTMX endpoints for logging settings
+app.get('/htmx/logging-config', async (c: Context) => {
   try {
-    const walletData = await c.req.json();
+    const { getDatabase } = await import('./src/lib/database.js');
+    const db = getDatabase();
+    const result = await db.query(
+      `SELECT log_categories FROM service_configs WHERE service_name = 'unified' LIMIT 1`
+    );
+    
+    let logCategories;
+    if (result.rows.length === 0) {
+      // Return default configuration if not found
+      logCategories = {
+        connection: true,
+        wallet: true,
+        trade: true,
+        multiWhale: true,
+        transaction: false,
+        dataFlow: false,
+        health: true,
+        debug: false
+      };
+    } else {
+      logCategories = result.rows[0].log_categories;
+    }
+    
+    // Return logging config form with current values
+    return c.html(`
+      <article>
+        <header>
+            <h3>Log Categories</h3>
+            <p>Toggle which events appear in the console logs</p>
+        </header>
+        
+        <form hx-put="/htmx/logging-config" hx-trigger="change" hx-target="#toast-container">
+            <div class="grid">
+                <!-- Connection Events -->
+                <div>
+                    <label>
+                        <input type="checkbox" name="connection" role="switch" ${logCategories.connection ? 'checked' : ''}>
+                        <strong>🔌 Connection Events</strong>
+                        <br>
+                        <small>WebSocket connections, disconnections, reconnects</small>
+                    </label>
+                </div>
+                
+                <!-- Wallet Activity -->
+                <div>
+                    <label>
+                        <input type="checkbox" name="wallet" role="switch" ${logCategories.wallet ? 'checked' : ''}>
+                        <strong>👛 Wallet Activity</strong>
+                        <br>
+                        <small>Wallet loading, tracking changes</small>
+                    </label>
+                </div>
+                
+                <!-- Trade Detection -->
+                <div>
+                    <label>
+                        <input type="checkbox" name="trade" role="switch" ${logCategories.trade ? 'checked' : ''}>
+                        <strong>📊 Trade Detection</strong>
+                        <br>
+                        <small>Entry/exit trades, amounts, tokens</small>
+                    </label>
+                </div>
+                
+                <!-- Multi-Whale Coordination -->
+                <div>
+                    <label>
+                        <input type="checkbox" name="multiWhale" role="switch" ${logCategories.multiWhale ? 'checked' : ''}>
+                        <strong>🎯 Multi-Whale Alerts</strong>
+                        <br>
+                        <small>Multiple whales in same token</small>
+                    </label>
+                </div>
+                
+                <!-- Transaction Processing -->
+                <div>
+                    <label>
+                        <input type="checkbox" name="transaction" role="switch" ${logCategories.transaction ? 'checked' : ''}>
+                        <strong>💾 Transaction Processing</strong>
+                        <br>
+                        <small>Raw transaction details, parsing</small>
+                    </label>
+                </div>
+                
+                <!-- Data Flow -->
+                <div>
+                    <label>
+                        <input type="checkbox" name="dataFlow" role="switch" ${logCategories.dataFlow ? 'checked' : ''}>
+                        <strong>📡 Data Flow</strong>
+                        <br>
+                        <small>WebSocket messages, queue status</small>
+                    </label>
+                </div>
+                
+                <!-- Health Monitoring -->
+                <div>
+                    <label>
+                        <input type="checkbox" name="health" role="switch" ${logCategories.health ? 'checked' : ''}>
+                        <strong>❤️ Health & Performance</strong>
+                        <br>
+                        <small>Heartbeats, latency, memory usage</small>
+                    </label>
+                </div>
+                
+                <!-- Debug Information -->
+                <div>
+                    <label>
+                        <input type="checkbox" name="debug" role="switch" ${logCategories.debug ? 'checked' : ''}>
+                        <strong>🐛 Debug Information</strong>
+                        <br>
+                        <small>Detailed errors, raw data, state changes</small>
+                    </label>
+                </div>
+            </div>
+            
+            <footer>
+                <div class="grid">
+                    <button type="button" class="secondary" disabled>Save as Preset (Coming Soon)</button>
+                    <button type="button" class="outline" onclick="location.reload()">Reset to Defaults</button>
+                </div>
+            </footer>
+        </form>
+      </article>
+    `);
+  } catch (error) {
+    console.error('Failed to get logging settings:', error);
+    return c.html('<div class="error">Failed to load logging settings</div>', 500);
+  }
+});
+
+app.put('/htmx/logging-config', async (c: Context) => {
+  try {
+    const formData = await c.req.formData();
+    const logCategories = {
+      connection: formData.get('connection') === 'on',
+      wallet: formData.get('wallet') === 'on',
+      trade: formData.get('trade') === 'on',
+      multiWhale: formData.get('multiWhale') === 'on',
+      transaction: formData.get('transaction') === 'on',
+      dataFlow: formData.get('dataFlow') === 'on',
+      health: formData.get('health') === 'on',
+      debug: formData.get('debug') === 'on'
+    };
+    
+    const { getDatabase } = await import('./src/lib/database.js');
+    const db = getDatabase();
+    
+    // Upsert the configuration
+    await db.query(
+      `INSERT INTO service_configs (service_name, log_categories) 
+       VALUES ('unified', $1::jsonb)
+       ON CONFLICT (service_name) 
+       DO UPDATE SET log_categories = $1::jsonb, updated_at = NOW()`,
+      [JSON.stringify(logCategories)]
+    );
+    
+    // Publish configuration change via message bus
+    messageBus.publish('logging_config_changed', { log_categories: logCategories });
+    
+    // Return success message
+    return c.html(`
+      <div class="toast success" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        ✅ Logging configuration updated
+      </div>
+      <script>
+        setTimeout(() => {
+          document.querySelector('.toast').remove();
+        }, 3000);
+      </script>
+    `);
+  } catch (error) {
+    console.error('Failed to update logging settings:', error);
+    return c.html(`
+      <div class="toast error" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        ❌ Failed to update configuration
+      </div>
+      <script>
+        setTimeout(() => {
+          document.querySelector('.toast').remove();
+        }, 3000);
+      </script>
+    `, 500);
+  }
+});
+
+// HTMX endpoints for data partials
+app.get('/htmx/signals', async (c: Context) => {
+  const signals = await getActiveSignals();
+  const { activeSignalsPartial } = await import('./src/templates/partials/active-signals.js');
+  
+  // Generate signals HTML
+  let signalsHtml = '';
+  if (signals.length === 0) {
+    signalsHtml = '<p style="color: var(--pico-muted-color); text-align: center; padding: 2rem;">No active signals</p>';
+  } else {
+    signalsHtml = signals.map(signal => `
+      <div class="signal-card" data-signal-id="${signal.id}">
+        <h4>🎯 ${signal.whale_count} Whale Signal</h4>
+        <p><strong>Token:</strong> ${signal.token_symbol || 'Unknown'}</p>
+        <p><strong>Trigger:</strong> ${signal.trigger_reason}</p>
+        <p><strong>Created:</strong> ${new Date(signal.created_at).toLocaleString()}</p>
+      </div>
+    `).join('');
+  }
+  
+  return c.html(signalsHtml);
+});
+
+app.get('/htmx/trades', async (c: Context) => {
+  const limit = Number(c.req.query('limit')) || 100;
+  const trades = await getRecentTrades(limit);
+  
+  // Return trade cards HTML for the recent-trades component
+  if (trades.length === 0) {
+    return c.html('<p style="color: var(--pico-muted-color); text-align: center; padding: 2rem; grid-column: 1 / -1;">No recent trades found</p>');
+  }
+  
+  // The frontend recent-trades component expects JSON data, but we'll return it as a script
+  return c.html(`
+    <script>
+      window.tradesData = ${JSON.stringify(trades)};
+      if (window.walletTradeManager) {
+        window.walletTradeManager.clear();
+        window.tradesData.forEach(trade => {
+          const tokenSymbol = trade.token_symbol || 'Unknown';
+          const tokenName = trade.token_name;
+          const walletAlias = trade.wallet_alias || \`\${trade.wallet_address.slice(0, 8)}...\${trade.wallet_address.slice(-4)}\`;
+          const walletColor = trade.wallet_color || '#4338ca';
+          const isVerified = trade.is_verified || false;
+          const twitterHandle = trade.twitter_handle;
+          const telegramChannel = trade.telegram_channel;
+          const streamingChannel = trade.streaming_channel;
+          const imageData = trade.image_data;
+          
+          const tradeData = {
+            id: trade.id,
+            trade_type: trade.trade_type,
+            sol_amount: trade.sol_amount || 0,
+            token_amount: trade.token_amount,
+            token_symbol: tokenSymbol,
+            token_name: tokenName,
+            token_address: trade.coin_address,
+            price_usd: trade.price_usd,
+            transaction_hash: trade.transaction_hash,
+            trade_timestamp: trade.trade_timestamp,
+            time_ago: new Date(trade.trade_timestamp).toLocaleString()
+          };
+          
+          window.walletTradeManager.addTrade(
+            trade.wallet_address,
+            tradeData,
+            walletAlias,
+            walletColor,
+            isVerified,
+            twitterHandle,
+            telegramChannel,
+            streamingChannel,
+            imageData
+          );
+        });
+        
+        // Trigger re-render
+        if (window.renderWallets) window.renderWallets();
+      }
+    </script>
+  `);
+});
+
+app.get('/htmx/stats', async (c: Context) => {
+  const stats = await getStats();
+  
+  return c.html(`
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>📊 Total Trades</h3>
+        <p class="stat-value">${stats.total_trades || 0}</p>
+      </div>
+      <div class="stat-card">
+        <h3>👛 Active Wallets</h3>
+        <p class="stat-value">${stats.active_wallets || 0}</p>
+      </div>
+      <div class="stat-card">
+        <h3>🎯 Active Signals</h3>
+        <p class="stat-value">${stats.active_signals || 0}</p>
+      </div>
+      <div class="stat-card">
+        <h3>💰 Portfolio Value</h3>
+        <p class="stat-value">$${(stats.portfolio_value || 0).toLocaleString()}</p>
+      </div>
+    </div>
+  `);
+});
+
+// HTMX endpoints for service management
+app.get('/htmx/services/status', async (c: Context) => {
+  const statuses = serviceManager.getAllServiceStatuses();
+  
+  const statusHtml = statuses.map(status => {
+    const emoji = status.status === 'running' ? '✅' : 
+                 status.status === 'error' ? '❌' : '⏹️';
+    return `
+      <div class="service-status">
+        <span>${emoji} ${status.name}</span>
+        <span class="status-${status.status}">${status.status}</span>
+        ${status.error ? `<small class="error">${status.error}</small>` : ''}
+        <button hx-post="/htmx/services/${status.name}/restart" 
+                hx-target="#toast-container" 
+                class="secondary">Restart</button>
+      </div>
+    `;
+  }).join('');
+  
+  return c.html(statusHtml);
+});
+
+app.post('/htmx/services/:service/restart', async (c: Context) => {
+  try {
+    const serviceName = c.req.param('service');
+    await serviceManager.restartService(serviceName);
+    
+    return c.html(`
+      <div class="toast success">
+        ✅ Service ${serviceName} restarted successfully
+      </div>
+      <script>
+        setTimeout(() => {
+          document.querySelector('.toast').remove();
+          htmx.trigger('#services-status', 'refresh');
+        }, 2000);
+      </script>
+    `);
+  } catch (error) {
+    return c.html(`
+      <div class="toast error">
+        ❌ Failed to restart service: ${error.message}
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `, 500);
+  }
+});
+
+app.post('/htmx/trading/enable', async (c: Context) => {
+  try {
+    await serviceManager.enableLiveTrading();
+    
+    return c.html(`
+      <div class="toast success">
+        ✅ Live trading enabled
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `);
+  } catch (error) {
+    return c.html(`
+      <div class="toast error">
+        ❌ Failed to enable trading: ${error.message}
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `, 500);
+  }
+});
+
+app.post('/htmx/trading/disable', async (c: Context) => {
+  try {
+    await serviceManager.disableLiveTrading();
+    
+    return c.html(`
+      <div class="toast success">
+        ✅ Live trading disabled
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `);
+  } catch (error) {
+    return c.html(`
+      <div class="toast error">
+        ❌ Failed to disable trading: ${error.message}
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `, 500);
+  }
+});
+
+app.post('/htmx/analysis/trigger', async (c: Context) => {
+  try {
+    await serviceManager.triggerManualAnalysis();
+    
+    return c.html(`
+      <div class="toast success">
+        ✅ Analysis triggered successfully
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `);
+  } catch (error) {
+    return c.html(`
+      <div class="toast error">
+        ❌ Failed to trigger analysis: ${error.message}
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `, 500);
+  }
+});
+
+// HTMX endpoints for UI settings
+app.get('/htmx/settings/ui', async (c: Context) => {
+  try {
+    const { getDatabase } = await import('./src/lib/database.js');
+    const db = getDatabase();
+    const result = await db.query(
+      `SELECT ui_refresh_config FROM service_configs WHERE service_name = 'unified' LIMIT 1`
+    );
+    
+    let config;
+    if (result.rows.length === 0) {
+      config = {
+        balance_interval_minutes: 5,
+        auto_refresh_enabled: true,
+        pause_on_activity: true,
+        show_refresh_indicators: true
+      };
+    } else {
+      config = result.rows[0].ui_refresh_config;
+    }
+    
+    return c.html(`
+      <form hx-put="/htmx/settings/ui" hx-target="#toast-container">
+        <div>
+          <label for="balance-interval">
+            Balance Refresh Interval (minutes)
+            <input type="number" name="balance_interval_minutes" 
+                   value="${config.balance_interval_minutes}" 
+                   min="1" max="60" required>
+            <small>How often to check wallet balances (1-60 minutes)</small>
+          </label>
+        </div>
+        
+        <div class="grid">
+          <div>
+            <label>
+              <input type="checkbox" name="auto_refresh_enabled" 
+                     ${config.auto_refresh_enabled ? 'checked' : ''} role="switch">
+              Enable Auto-Refresh
+            </label>
+            <small>Automatically refresh balances and age information</small>
+          </div>
+          <div>
+            <label>
+              <input type="checkbox" name="pause_on_activity" 
+                     ${config.pause_on_activity ? 'checked' : ''} role="switch">
+              Pause on User Activity
+            </label>
+            <small>Pause auto-refresh when user is interacting with the page</small>
+          </div>
+        </div>
+        
+        <div>
+          <label>
+            <input type="checkbox" name="show_refresh_indicators" 
+                   ${config.show_refresh_indicators ? 'checked' : ''} role="switch">
+            Show Refresh Indicators
+          </label>
+          <small>Display loading indicators during refresh operations</small>
+        </div>
+        
+        <div class="grid">
+          <button type="submit">Save Settings</button>
+          <button type="button" class="secondary" onclick="location.reload()">Reset to Defaults</button>
+        </div>
+      </form>
+    `);
+  } catch (error) {
+    console.error('Failed to get UI settings:', error);
+    return c.html('<div class="error">Failed to load UI settings</div>', 500);
+  }
+});
+
+app.put('/htmx/settings/ui', async (c: Context) => {
+  try {
+    const formData = await c.req.formData();
+    const uiConfig = {
+      balance_interval_minutes: parseInt(formData.get('balance_interval_minutes') || '5'),
+      auto_refresh_enabled: formData.get('auto_refresh_enabled') === 'on',
+      pause_on_activity: formData.get('pause_on_activity') === 'on',
+      show_refresh_indicators: formData.get('show_refresh_indicators') === 'on'
+    };
+    
+    const { getDatabase } = await import('./src/lib/database.js');
+    const db = getDatabase();
+    
+    await db.query(
+      `INSERT INTO service_configs (service_name, ui_refresh_config) 
+       VALUES ('unified', $1::jsonb)
+       ON CONFLICT (service_name) 
+       DO UPDATE SET ui_refresh_config = $1::jsonb, updated_at = NOW()`,
+      [JSON.stringify(uiConfig)]
+    );
+    
+    // Publish configuration change via message bus
+    messageBus.publish('ui_config_changed', { ui_refresh_config: uiConfig });
+    
+    return c.html(`
+      <div class="toast success">
+        ✅ UI settings updated successfully
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `);
+  } catch (error) {
+    console.error('Failed to update UI settings:', error);
+    return c.html(`
+      <div class="toast error">
+        ❌ Failed to update UI settings
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `, 500);
+  }
+});
+
+
+// HTMX endpoint for creating wallets
+app.post('/htmx/wallets', async (c: Context) => {
+  try {
+    const formData = await c.req.formData();
+    const walletData = {
+      address: formData.get('address')?.toString().trim(),
+      alias: formData.get('alias')?.toString(),
+      tags: formData.get('tags')?.toString().split(',').map(t => t.trim()).filter(t => t),
+      ui_color: formData.get('ui_color')?.toString() || '#4338ca',
+      twitter_handle: formData.get('twitter_handle')?.toString(),
+      telegram_channel: formData.get('telegram_channel')?.toString(),
+      streaming_channel: formData.get('streaming_channel')?.toString(),
+      image_data: formData.get('image_data')?.toString(),
+      notes: formData.get('notes')?.toString(),
+      sol_balance: null,
+      last_balance_check: null,
+      is_active: true
+    };
     
     // Check if wallet already exists
-    const existingWallet = await getTrackedWalletByAddress(walletData.address);
+    const existingWallet = await getTrackedWalletByAddress(walletData.address!);
     if (existingWallet) {
-      return c.json({ error: 'A wallet with this address already exists' }, 409);
+      return c.html(`
+        <div class="toast error" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+          ❌ A wallet with this address already exists
+        </div>
+        <script>
+          setTimeout(() => document.querySelector('.toast').remove(), 3000);
+        </script>
+      `, 409);
     }
     
     const newWallet = await createTrackedWallet(walletData);
@@ -154,70 +786,142 @@ app.post('/api/wallets', async (c) => {
       await walletWatcher.loadTrackedWallets();
     }
     
-    return c.json({ wallet: newWallet }, 201);
+    // Publish wallet update event
+    messageBus.publish('wallet_updated', { wallet: newWallet });
+    
+    return c.html(`
+      <div class="toast success" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        ✅ Wallet added: ${newWallet.alias}
+      </div>
+      <script>
+        setTimeout(() => {
+          document.querySelector('.toast').remove();
+          htmx.trigger('#wallets-table', 'refresh');
+        }, 2000);
+      </script>
+    `, 201);
   } catch (error) {
     console.error('Error creating wallet:', error);
     
     // Handle database unique constraint violation
-    if (error instanceof Error && (error.message?.includes('unique constraint') || error.message?.includes('duplicate key'))) {
-      return c.json({ error: 'A wallet with this address already exists' }, 409);
-    }
-    
-    return c.json({ error: 'Failed to create wallet' }, 500);
+    const errorMessage = error instanceof Error && (error.message?.includes('unique constraint') || error.message?.includes('duplicate key'))
+      ? 'A wallet with this address already exists'
+      : 'Failed to create wallet';
+      
+    return c.html(`
+      <div class="toast error" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        ❌ ${errorMessage}
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `, 500);
   }
 });
 
-app.put('/api/wallets/:address', async (c) => {
+app.put('/htmx/wallets/:address', async (c: Context) => {
   try {
     const address = c.req.param('address');
-    const updates = await c.req.json();
+    const formData = await c.req.formData();
+    
+    const updates = {
+      alias: formData.get('alias')?.toString(),
+      tags: formData.get('tags')?.toString().split(',').map(t => t.trim()).filter(t => t),
+      ui_color: formData.get('ui_color')?.toString() || '#4338ca',
+      twitter_handle: formData.get('twitter_handle')?.toString(),
+      telegram_channel: formData.get('telegram_channel')?.toString(),
+      streaming_channel: formData.get('streaming_channel')?.toString(),
+      image_data: formData.get('image_data')?.toString(),
+      notes: formData.get('notes')?.toString(),
+      is_active: formData.get('is_active') === 'on'
+    };
+    
     const updatedWallet = await updateTrackedWallet(address, updates);
     
     if (!updatedWallet) {
-      return c.json({ error: 'Wallet not found' }, 404);
+      return c.html(`
+        <div class="toast error" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+          ❌ Wallet not found
+        </div>
+        <script>
+          setTimeout(() => document.querySelector('.toast').remove(), 3000);
+        </script>
+      `, 404);
     }
     
-    return c.json(updatedWallet);
+    // Publish wallet update event
+    messageBus.publish('wallet_updated', { wallet: updatedWallet });
+    
+    return c.html(`
+      <div class="toast success" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        ✅ Wallet updated successfully
+      </div>
+      <script>
+        setTimeout(() => {
+          document.querySelector('.toast').remove();
+          htmx.trigger('#wallets-table', 'refresh');
+        }, 2000);
+      </script>
+    `);
   } catch (error) {
     console.error('Error updating wallet:', error);
-    return c.json({ error: 'Failed to update wallet' }, 500);
+    return c.html(`
+      <div class="toast error" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        ❌ Failed to update wallet
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `, 500);
   }
 });
 
-app.delete('/api/wallets/:address', async (c) => {
+app.delete('/htmx/wallets/:address', async (c: Context) => {
   try {
     const address = c.req.param('address');
     const deleted = await deleteTrackedWallet(address);
     
     if (!deleted) {
-      return c.json({ error: 'Wallet not found' }, 404);
+      return c.html(`
+        <div class="toast error" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+          ❌ Wallet not found
+        </div>
+        <script>
+          setTimeout(() => document.querySelector('.toast').remove(), 3000);
+        </script>
+      `, 404);
     }
     
-    return c.json({ success: true });
+    // Publish wallet update event
+    messageBus.publish('wallet_updated', { wallet: { address, deleted: true } });
+    
+    return c.html(`
+      <div class="toast success" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        ✅ Wallet deleted successfully
+      </div>
+      <script>
+        setTimeout(() => {
+          document.querySelector('.toast').remove();
+          htmx.trigger('#wallets-table', 'refresh');
+        }, 2000);
+      </script>
+    `);
   } catch (error) {
     console.error('Error deleting wallet:', error);
-    return c.json({ error: 'Failed to delete wallet' }, 500);
+    return c.html(`
+      <div class="toast error" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        ❌ Failed to delete wallet
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `, 500);
   }
 });
 
-app.patch('/api/wallets/:address/toggle', async (c) => {
-  try {
-    const address = c.req.param('address');
-    const updatedWallet = await toggleWalletStatus(address);
-    
-    if (!updatedWallet) {
-      return c.json({ error: 'Wallet not found' }, 404);
-    }
-    
-    return c.json(updatedWallet);
-  } catch (error) {
-    console.error('Error toggling wallet status:', error);
-    return c.json({ error: 'Failed to toggle wallet status' }, 500);
-  }
-});
 
 // HTMX endpoint for toggling wallet status - returns only the updated row
-app.patch('/htmx/wallets/:address/toggle', async (c) => {
+app.patch('/htmx/wallets/:address/toggle', async (c: Context) => {
   try {
     const address = c.req.param('address');
     const updatedWallet = await toggleWalletStatus(address);
@@ -236,13 +940,16 @@ app.patch('/htmx/wallets/:address/toggle', async (c) => {
 });
 
 // HTMX endpoints for wallets - return HTML fragments
-app.get('/htmx/partials/wallets-table', async (c) => {
+app.get('/htmx/partials/wallets-table', async (c: Context) => {
   try {
+    console.log('wallets-table endpoint called');
     const { sortBy, sortOrder, tags } = c.req.query();
     const validSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
     
     // Get all wallets to extract all available tags
+    console.log('Fetching all wallets...');
     const allWallets = await getTrackedWallets();
+    console.log('All wallets fetched:', allWallets?.length || 0);
     
     // Safety check - should not be needed now, but keeping for robustness
     if (!Array.isArray(allWallets)) {
@@ -281,7 +988,7 @@ app.get('/htmx/partials/wallets-table', async (c) => {
 });
 
 // Partial fragments
-app.get('/htmx/partials/:partial', (c) => {
+app.get('/htmx/partials/:partial', (c: Context) => {
   const partialName = c.req.param('partial');
   const html = getPartial(partialName);
   
@@ -333,14 +1040,9 @@ async function startServer() {
 
 // Only start server if this file is the main module
 const isMainModule = () => {
-  // Runtime-agnostic main module detection
-  if (typeof Bun !== 'undefined') {
-    return import.meta.main;
-  }
-  if (typeof process !== 'undefined') {
-    return import.meta.url === `file://${process.argv[1]}`;
-  }
-  return false;
+  // For runtime safety, always return true in server context
+  // This allows the server to start regardless of runtime detection issues
+  return true;
 };
 
 if (isMainModule()) {

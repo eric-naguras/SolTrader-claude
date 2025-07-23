@@ -11,7 +11,8 @@
       "mcp__neon__describe_table_schema",
       "mcp__neon__prepare_database_migration",
       "mcp__neon__run_sql_transaction",
-      "mcp__neon__run_sql"
+      "mcp__neon__run_sql",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": []
   }

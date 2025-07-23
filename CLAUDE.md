@@ -161,3 +161,655 @@ Architecture supports evolution:
 - Phase 3: Advanced exit strategies
 - Phase 4: Whale discovery engine
 - Phase 5: Web dashboard and public API
+
+# Architecture Overview
+
+## Core Technologies
+- **Bun**: Runtime and package manager (native TypeScript support, no build step)
+- **Hono.js**: Lightweight web framework
+- **HTMX**: HTML-first approach for dynamic interactions
+- **SSE (Server-Sent Events)**: Real-time server-to-client communication
+
+## Architectural Patterns
+
+### 1. Message Bus Pattern
+A central publish/subscribe system for decoupled service communication:
+```typescript
+// Publishing events
+messageBus.publish('config.changed', { key: 'value' });
+
+// Subscribing to events
+const unsubscribe = messageBus.subscribe('config.changed', (data) => {
+  // Handle event
+});
+```
+
+**Benefits:**
+- Services don't need direct references to each other
+- Easy to add new services without modifying existing code
+- Clear event flow for debugging
+
+### 2. Service Architecture
+Services implement a standard interface and lifecycle:
+```typescript
+interface Service {
+  name: string;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  getStatus(): ServiceStatus;
+}
+```
+
+**Service Manager** orchestrates all services:
+- Registers and manages service lifecycle
+- Provides health monitoring
+- Handles graceful shutdown
+
+### 3. Frontend Architecture (HTMX + SSE Hybrid)
+- **HTMX**: Handles user interactions (forms, buttons) with declarative attributes
+- **Vanilla JS + SSE**: Manages real-time updates for better compatibility
+- **No build step**: Direct HTML/JS served by the server
+
+```html
+<!-- HTMX for user actions -->
+<button hx-post="/api/action" hx-trigger="click">Click Me</button>
+
+<!-- Vanilla JS for SSE -->
+<script>
+const evtSource = new EventSource('/api/sse');
+evtSource.addEventListener('update', (e) => {
+  document.getElementById('display').textContent = e.data;
+});
+</script>
+```
+
+## Data Flow
+1. **User Action** → HTMX → HTTP POST → Server Handler
+2. **Server Handler** → Message Bus → Service(s)
+3. **Service Processing** → Message Bus → SSE Handler
+4. **SSE Handler** → EventSource → DOM Update
+
+## Key Principles
+- **Separation of Concerns**: Each service has a single responsibility
+- **Event-Driven**: Services communicate through events, not direct calls
+- **Stateless HTTP**: Use SSE for server-initiated updates
+- **Progressive Enhancement**: Works without JavaScript, enhanced with HTMX/SSE
+- **Extensive Logging**: Every component logs its actions for debugging
+
+
+# HTMX + Service Architecture Quick Reference
+
+## 🚀 Quick Start Pattern
+```typescript
+// 1. Message Bus Event
+messageBus.publish('feature.action', { data });
+
+// 2. Service Subscription  
+messageBus.subscribe('feature.action', (data) => {
+  // Process and publish result
+  messageBus.publish('feature.result', { result });
+});
+
+// 3. SSE to Frontend
+messageBus.subscribe('feature.result', (data) => {
+  // Send to connected clients via SSE
+});
+```
+
+## 📋 Service Template
+```typescript
+export class FeatureService implements Service {
+  name = 'FeatureService';
+  private running = false;
+  private unsubscribers: (() => void)[] = [];
+  
+  constructor(private messageBus: MessageBus) {}
+  
+  async start() {
+    this.unsubscribers.push(
+      this.messageBus.subscribe('event', this.handleEvent)
+    );
+    this.running = true;
+  }
+  
+  async stop() {
+    this.unsubscribers.forEach(unsub => unsub());
+    this.running = false;
+  }
+  
+  getStatus() {
+    return { running: this.running };
+  }
+}
+```
+
+## 🌐 Frontend Patterns
+
+### HTMX (User Actions)
+```html
+<button hx-post="/api/endpoint" 
+        hx-vals='js:{param: value}'
+        hx-swap="none">Action</button>
+```
+
+### SSE (Real-time Updates)
+```javascript
+const evtSource = new EventSource('/api/sse');
+evtSource.addEventListener('eventName', (e) => {
+  document.getElementById('target').textContent = e.data;
+});
+```
+
+## 🛣️ Route Patterns
+```typescript
+// Serve HTML
+app.get('/', async (c) => {
+  return c.html(await Bun.file('./index.html').text());
+});
+
+// Handle HTMX POST
+app.post('/api/action', async (c) => {
+  const body = await c.req.parseBody();
+  messageBus.publish('action.requested', body);
+  return c.text('OK');
+});
+
+// SSE Endpoint
+app.get('/api/sse', (c) => {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      const unsub = messageBus.subscribe('updates', (data) => {
+        const msg = `event: update\ndata: ${JSON.stringify(data)}\n\n`;
+        controller.enqueue(encoder.encode(msg));
+      });
+    }
+  });
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache'
+    }
+  });
+});
+```
+
+## 📝 Event Naming Convention
+- `domain.action.detail`
+- Examples:
+  - `user.login.success`
+  - `config.theme.changed`
+  - `data.refresh.requested`
+
+## ⚠️ Do's and Don'ts
+
+### ✅ DO
+- Use message bus for ALL service communication
+- Log with [ServiceName] prefix
+- Clean up in stop() method
+- Test with curl: `curl -N localhost:8000/api/sse`
+
+### ❌ DON'T
+- Import services into each other
+- Use HTMX SSE extension
+- Use localStorage in SSE/services
+- Skip error handling
+
+## 🐛 Debug Commands
+```bash
+# Test SSE
+curl -N http://localhost:8000/api/sse
+
+# Check health
+curl http://localhost:8000/health
+
+# Run with auto-reload
+bun run --watch server.ts
+```
+
+# Instructions for Claude Code
+
+When working on this project, follow these architectural rules strictly:
+
+## Technology Stack
+- Runtime: Bun (NOT Node.js or Deno)
+- Framework: Hono.js
+- Frontend: HTMX for interactions, vanilla JS for SSE
+- No build tools, no bundlers, TypeScript runs directly
+
+## Critical Implementation Rules
+
+### 1. Service Communication
+```typescript
+// ALWAYS use message bus for inter-service communication
+messageBus.publish('event.name', data);
+messageBus.subscribe('event.name', handler);
+
+// NEVER import services into each other
+// NEVER use direct service method calls
+```
+
+### 2. Creating a New Service
+```typescript
+// Every service MUST follow this pattern:
+export class MyService implements Service {
+  name = 'MyService';
+  private running = false;
+  
+  constructor(private messageBus: MessageBus) {
+    console.log('[MyService] Initialized');
+  }
+  
+  async start(): Promise<void> {
+    console.log('[MyService] Starting...');
+    // Subscribe to events
+    // Initialize resources
+    this.running = true;
+  }
+  
+  async stop(): Promise<void> {
+    console.log('[MyService] Stopping...');
+    // Unsubscribe from events
+    // Clean up resources
+    this.running = false;
+  }
+  
+  getStatus(): ServiceStatus {
+    return { running: this.running };
+  }
+}
+```
+
+### 3. SSE Implementation for Bun
+```typescript
+// Use ReadableStream, NOT Hono's streamSSE helper
+app.get('/api/sse', (c) => {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      // Format: event: name\ndata: content\n\n
+      const message = `event: update\ndata: ${JSON.stringify(data)}\n\n`;
+      controller.enqueue(encoder.encode(message));
+    }
+  });
+  
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive'
+    }
+  });
+});
+```
+
+### 4. Frontend Pattern
+```html
+<!-- HTMX for user actions ONLY -->
+<button hx-post="/api/action" 
+        hx-trigger="click" 
+        hx-swap="none">
+  Click Me
+</button>
+
+<!-- Vanilla JS for SSE, NOT hx-ext="sse" -->
+<script>
+const evtSource = new EventSource('/api/sse');
+evtSource.addEventListener('update', (e) => {
+  const data = JSON.parse(e.data);
+  // Update DOM
+});
+</script>
+```
+
+### 5. Server Structure
+```typescript
+// server.ts structure:
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+
+const app = new Hono();
+app.use('*', cors());
+
+// 1. Initialize message bus
+const messageBus = new MessageBus();
+
+// 2. Initialize service manager
+const serviceManager = new ServiceManager(messageBus);
+
+// 3. Create and register services
+const myService = new MyService(messageBus);
+serviceManager.registerService('myService', myService);
+
+// 4. Start all services
+await serviceManager.startAll();
+
+// 5. Define routes
+app.get('/', async (c) => {
+  const file = Bun.file('./index.html');
+  return c.html(await file.text());
+});
+
+// 6. Export for Bun
+export default { port: 8000, fetch: app.fetch };
+```
+
+## Common Mistakes to Avoid
+1. ❌ Using Hono's streamSSE (compatibility issues with Bun)
+2. ❌ Using HTMX SSE extension (use vanilla EventSource)
+3. ❌ Direct service imports (always use message bus)
+4. ❌ Missing cleanup in stop() methods
+5. ❌ Using Deno or Node.js APIs (use Bun APIs)
+6. ❌ Complex build steps (run TypeScript directly)
+
+## Testing Checklist
+- [ ] Health endpoint shows all service statuses
+- [ ] SSE connection works (test with curl -N)
+- [ ] Message bus events are logged
+- [ ] Services start/stop cleanly
+- [ ] No direct service dependencies
+
+## Remember
+- Log everything with [ServiceName] prefix
+- Services communicate through events only
+- HTMX for actions, EventSource for updates
+- Keep it simple, no build steps needed
+
+# Example: Adding a Chat Feature Using the Architecture
+
+This example shows how to add a complete chat feature following the service architecture pattern.
+
+## 1. Create the Chat Service
+
+```typescript
+// services/chatService.ts
+import { Service, ServiceStatus } from './serviceManager.ts';
+import { MessageBus } from './messageBus.ts';
+
+export class ChatService implements Service {
+    name = 'ChatService';
+    private running = false;
+    private messages: Array<{id: string, user: string, text: string, timestamp: Date}> = [];
+    private unsubscribers: (() => void)[] = [];
+    
+    constructor(private messageBus: MessageBus) {
+        console.log('[ChatService] Initialized');
+    }
+    
+    async start(): Promise<void> {
+        console.log('[ChatService] Starting...');
+        
+        // Subscribe to chat events
+        this.unsubscribers.push(
+            this.messageBus.subscribe('chat.message.send', (data) => {
+                this.handleNewMessage(data);
+            })
+        );
+        
+        this.unsubscribers.push(
+            this.messageBus.subscribe('chat.history.request', (data) => {
+                this.handleHistoryRequest(data);
+            })
+        );
+        
+        this.running = true;
+        console.log('[ChatService] Started');
+    }
+    
+    async stop(): Promise<void> {
+        console.log('[ChatService] Stopping...');
+        this.unsubscribers.forEach(unsub => unsub());
+        this.unsubscribers = [];
+        this.running = false;
+        console.log('[ChatService] Stopped');
+    }
+    
+    getStatus(): ServiceStatus {
+        return {
+            running: this.running,
+            metadata: {
+                messageCount: this.messages.length
+            }
+        };
+    }
+    
+    private handleNewMessage(data: {user: string, text: string}) {
+        const message = {
+            id: crypto.randomUUID(),
+            user: data.user,
+            text: data.text,
+            timestamp: new Date()
+        };
+        
+        this.messages.push(message);
+        console.log(`[ChatService] New message from ${data.user}: ${data.text}`);
+        
+        // Publish the message for SSE
+        this.messageBus.publish('chat.message.received', message);
+    }
+    
+    private handleHistoryRequest(data: {requester: string}) {
+        console.log(`[ChatService] History requested by ${data.requester}`);
+        this.messageBus.publish('chat.history.response', {
+            messages: this.messages.slice(-50) // Last 50 messages
+        });
+    }
+}
+```
+
+## 2. Register the Service in server.ts
+
+```typescript
+// In server.ts, after other service registrations:
+import { ChatService } from './services/chatService.ts';
+
+const chatService = new ChatService(messageBus);
+serviceManager.registerService('chat', chatService);
+```
+
+## 3. Add HTTP Endpoints
+
+```typescript
+// In server.ts, add these routes:
+
+// Handle new chat messages from HTMX
+app.post('/api/chat/send', async (c) => {
+    try {
+        const body = await c.req.parseBody();
+        const user = body.user as string || 'Anonymous';
+        const text = body.text as string;
+        
+        console.log(`[Server] Chat message from ${user}: ${text}`);
+        
+        messageBus.publish('chat.message.send', { user, text });
+        
+        return c.text('OK');
+    } catch (error) {
+        console.error('[Server] Error processing chat message:', error);
+        return c.text('Error', 500);
+    }
+});
+
+// Modify the SSE endpoint to include chat events
+app.get('/api/sse', (c) => {
+    console.log('[Server] New SSE connection established');
+    
+    const encoder = new TextEncoder();
+    let eventId = 0;
+    const unsubscribers: (() => void)[] = [];
+    
+    const stream = new ReadableStream({
+        start(controller) {
+            // Subscribe to chat messages
+            unsubscribers.push(
+                messageBus.subscribe('chat.message.received', (data) => {
+                    const msg = `id: ${eventId++}\nevent: chatMessage\ndata: ${JSON.stringify(data)}\n\n`;
+                    try {
+                        controller.enqueue(encoder.encode(msg));
+                    } catch (error) {
+                        console.log('[Server] Failed to send chat message');
+                    }
+                })
+            );
+            
+            // Keep existing subscriptions...
+            
+            // Send initial connection message
+            const initialMsg = `id: ${eventId++}\nevent: connected\ndata: Connected to chat\n\n`;
+            controller.enqueue(encoder.encode(initialMsg));
+        },
+        
+        cancel() {
+            unsubscribers.forEach(unsub => unsub());
+        }
+    });
+    
+    return new Response(stream, {
+        headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
+        }
+    });
+});
+```
+
+## 4. Update the Frontend
+
+```html
+<!-- Add to index.html -->
+<div class="chat-section">
+    <h2>Chat</h2>
+    
+    <!-- Chat messages display -->
+    <div id="chat-messages" class="chat-messages">
+        <!-- Messages will appear here -->
+    </div>
+    
+    <!-- Chat input form using HTMX -->
+    <div class="chat-input">
+        <input type="text" 
+               id="chat-user" 
+               placeholder="Your name" 
+               value="Anonymous">
+        <input type="text" 
+               id="chat-text" 
+               placeholder="Type a message..."
+               hx-trigger="keyup[keyCode==13]"
+               hx-post="/api/chat/send"
+               hx-vals='js:{
+                   user: document.getElementById("chat-user").value,
+                   text: document.getElementById("chat-text").value
+               }'
+               hx-on::after-request="if(event.detail.successful) this.value = ''"
+               hx-swap="none">
+        <button hx-post="/api/chat/send"
+                hx-vals='js:{
+                    user: document.getElementById("chat-user").value,
+                    text: document.getElementById("chat-text").value
+                }'
+                hx-on::after-request="if(event.detail.successful) document.getElementById('chat-text').value = ''"
+                hx-swap="none">
+            Send
+        </button>
+    </div>
+</div>
+
+<script>
+// Add to existing JavaScript
+evtSource.addEventListener('chatMessage', function(e) {
+    const message = JSON.parse(e.data);
+    const messagesDiv = document.getElementById('chat-messages');
+    
+    const messageEl = document.createElement('div');
+    messageEl.className = 'chat-message';
+    messageEl.innerHTML = `
+        <strong>${message.user}:</strong> ${message.text}
+        <span class="timestamp">${new Date(message.timestamp).toLocaleTimeString()}</span>
+    `;
+    
+    messagesDiv.appendChild(messageEl);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    addLog(`Chat message from ${message.user}`);
+});
+</script>
+
+<style>
+.chat-section {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 10px;
+}
+
+.chat-messages {
+    height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: white;
+}
+
+.chat-message {
+    margin-bottom: 10px;
+    padding: 5px;
+}
+
+.timestamp {
+    font-size: 0.8em;
+    color: #666;
+    float: right;
+}
+
+.chat-input {
+    display: flex;
+    gap: 10px;
+}
+
+.chat-input input[type="text"] {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.chat-input button {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+</style>
+```
+
+## Event Flow Diagram
+
+```
+User types message → HTMX POST → /api/chat/send
+                                        ↓
+                              messageBus.publish('chat.message.send')
+                                        ↓
+                              ChatService handles message
+                                        ↓
+                              messageBus.publish('chat.message.received')
+                                        ↓
+                              SSE handler sends to clients
+                                        ↓
+                              Browser EventSource updates DOM
+```
+
+## Key Points Demonstrated
+
+1. **Service Independence**: ChatService doesn't know about HTTP or SSE
+2. **Message Bus Communication**: All components communicate through events
+3. **HTMX for Actions**: Send button uses `hx-post` and `hx-vals`
+4. **SSE for Updates**: Real-time message delivery to all connected clients
+5. **Clean Separation**: Frontend, HTTP layer, and business logic are separate
+6. **Proper Cleanup**: Service unsubscribes when stopped
+7. **Extensive Logging**: Every action is logged with [ServiceName] prefix
+
+This pattern can be replicated for any feature: notifications, user presence, live updates, etc.

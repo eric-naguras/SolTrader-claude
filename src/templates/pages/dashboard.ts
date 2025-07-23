@@ -1,8 +1,11 @@
 export const dashboardPage = () => /*html*/ `<section>
     <h1>Dashboard</h1>
     
-    <!-- Stats Grid -->
-    <div class="stats-grid" id="dashboard-stats" hx-get="/htmx/partials/stats" hx-trigger="load, refresh">
+    <!-- Stats Grid with real-time updates via vanilla EventSource -->
+    <div class="stats-grid" 
+         id="dashboard-stats" 
+         hx-get="/htmx/stats" 
+         hx-trigger="load, refresh">
         <article class="stat-card">
             <h3>-</h3>
             <p>Active Wallets</p>
@@ -21,21 +24,21 @@ export const dashboardPage = () => /*html*/ `<section>
         </article>
     </div>
 
-    <!-- Recent Trades -->
+    <!-- Recent Trades with real-time updates via vanilla EventSource -->
     <section>
         <h2>Recent Whale Trades</h2>
         <div id="trade-feed" class="feed">
-            <div hx-get="/htmx/partials/recent-trades" hx-trigger="load">
+            <div hx-get="/htmx/trades" hx-trigger="load">
                 <article aria-busy="true">Loading trades...</article>
             </div>
         </div>
     </section>
 
-    <!-- Active Signals -->
+    <!-- Active Signals with real-time updates via vanilla EventSource -->
     <section>
         <h2>Active Signals</h2>
         <div id="signals-list">
-            <div hx-get="/htmx/partials/active-signals" hx-trigger="load">
+            <div hx-get="/htmx/signals" hx-trigger="load">
                 <article aria-busy="true">Loading signals...</article>
             </div>
         </div>

@@ -39,6 +39,7 @@ export interface LoggerConfig {
 export class Logger {
   private serviceName: string;
   private enabledCategories: number = 0;
+  public config: LoggerConfig | null = null;
 
   constructor(serviceName: string) {
     this.serviceName = serviceName;
@@ -58,6 +59,7 @@ export class Logger {
         debug: ENV.LOG_DEBUG === 'true',
       };
       
+      this.config = config;
       this.updateEnabledCategories(config);
     } catch (error) {
       console.error('[Logger] Failed to load config from env:', error);
@@ -90,6 +92,7 @@ export class Logger {
       health: config.health ?? !!(this.enabledCategories & LogCategory.HEALTH),
       debug: config.debug ?? !!(this.enabledCategories & LogCategory.DEBUG),
     };
+    this.config = fullConfig;
     this.updateEnabledCategories(fullConfig);
   }
 

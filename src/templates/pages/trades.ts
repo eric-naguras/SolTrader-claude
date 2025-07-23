@@ -43,8 +43,10 @@ export const tradesPage = () => /*html*/ `<section x-data="tradeManager">
         <article aria-busy="true">Loading performance data...</article>
     </div>
 
-    <!-- Trades Table -->
-    <div id="trades-table" hx-get="/htmx/partials/trades-table" hx-trigger="load">
+    <!-- Trades Table with real-time updates -->
+    <div id="trades-table" 
+         hx-get="/htmx/partials/trades-table" 
+         hx-trigger="load">
         <article aria-busy="true">Loading trades...</article>
     </div>
 </section>`;

@@ -1,19 +1,29 @@
 import { database } from '../lib/database.js';
 import { Logger } from '../lib/logger.js';
+import { Service, ServiceStatus } from '../lib/service-interface.js';
+import { MessageBus } from '../lib/message-bus.js';
 
-export class PaperTrader {
+export class PaperTrader implements Service {
+  readonly name = 'PaperTrader';
+  
   private logger: Logger;
+  private messageBus: MessageBus;
   private isRunning: boolean = false;
+  private unsubscribers: (() => void)[] = [];
 
-  constructor() {
+  constructor(messageBus: MessageBus) {
+    this.messageBus = messageBus;
     this.logger = new Logger('paper-trader');
-    this.logger.system('Initialized paper trader');
+    this.logger.system('[PaperTrader] Initialized');
   }
 
-  async start() {
+  async start(): Promise<void> {
     try {
-      this.logger.system('Starting paper trader...');
+      this.logger.system('[PaperTrader] Starting...');
       this.isRunning = true;
+      
+      // Subscribe to message bus events
+      this.setupMessageBusListeners();
       
       // Set up periodic portfolio updates
       setInterval(() => this.updatePortfolioValues(), 60000); // Every minute
@@ -21,17 +31,74 @@ export class PaperTrader {
       // Update heartbeat periodically
       setInterval(() => this.updateHeartbeat(), 30000);
       
-      this.logger.system('Paper trader started successfully');
+      this.logger.system('[PaperTrader] Started successfully');
+      
+      // Publish service started event
+      this.messageBus.publish('service_started', { serviceName: this.name });
     } catch (error) {
-      this.logger.error('Failed to start paper trader:', error);
+      this.logger.error('[PaperTrader] Failed to start:', error);
+      this.isRunning = false;
       throw error;
     }
   }
 
-  async stop() {
-    this.logger.system('Stopping paper trader...');
+  async stop(): Promise<void> {
+    this.logger.system('[PaperTrader] Stopping...');
     this.isRunning = false;
-    await this.logger.cleanup();
+    
+    // Unsubscribe from message bus events
+    this.unsubscribers.forEach(unsub => unsub());
+    this.unsubscribers = [];
+    
+    this.logger.system('[PaperTrader] Stopped');
+    
+    // Publish service stopped event
+    this.messageBus.publish('service_stopped', { serviceName: this.name });
+  }
+
+  getStatus(): ServiceStatus {
+    return {
+      running: this.isRunning,
+      lastHeartbeat: new Date().toISOString(),
+      metadata: {
+        // Could add portfolio stats here
+      }
+    };
+  }
+
+  private setupMessageBusListeners(): void {
+    // Listen for new signals from SignalAnalyzer
+    const newSignalHandler = async (data: any) => {
+      this.logger.system('[PaperTrader] Received new_signal event');
+      await this.handleNewSignal(data.signal);
+    };
+
+    this.messageBus.subscribe('new_signal', newSignalHandler);
+    this.unsubscribers.push(() => this.messageBus.unsubscribe('new_signal', newSignalHandler));
+  }
+
+  // Handle new signal by creating paper trade
+  private async handleNewSignal(signal: any) {
+    try {
+      this.logger.system(`[PaperTrader] Creating paper trade for signal: ${signal.coin_address}`);
+      
+      // Default paper trade amount (could be configurable)
+      const tradeAmountSol = 1.0;
+      
+      // Use entry price of 1 for simplicity (could fetch real price)
+      const entryPrice = 1.0;
+      
+      const trade = await this.createPaperTrade(signal.id, signal.coin_address, entryPrice, tradeAmountSol);
+      
+      if (trade) {
+        this.logger.system(`[PaperTrader] Created paper trade: ${trade.id}`);
+        
+        // Publish paper trade event
+        this.messageBus.publish('paper_trade_executed', { trade });
+      }
+    } catch (error) {
+      this.logger.error('[PaperTrader] Error handling new signal:', error);
+    }
   }
 
   // Create paper trade from signal
@@ -55,7 +122,7 @@ export class PaperTrader {
         current_price: entryPrice
       });
 
-      this.logger.system(`Created paper trade for ${coinAddress.substring(0, 8)}... with ${tradeAmountSol} SOL`);
+      this.logger.system(`[PaperTrader] Created paper trade for ${coinAddress.substring(0, 8)}... with ${tradeAmountSol} SOL`);
       return trade;
     } catch (error) {
       this.logger.error('Error creating paper trade:', error);

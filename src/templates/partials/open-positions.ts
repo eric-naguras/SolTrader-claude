@@ -23,9 +23,9 @@ export const openPositionsPartial = () => `<div x-data="{ positions: [] }">
 
 <script>
 // Fetch open positions
-fetch('http://localhost:3001/api/trades/positions', {
+fetch('/api/trades/positions', {
     headers: {
-        'X-API-Key': window.CONFIG.API_KEY
+        'X-API-Key': window.CONFIG?.API_KEY || 'test-api-key'
     }
 })
     .then(r => r.json())

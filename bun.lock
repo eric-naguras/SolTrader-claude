@@ -14,6 +14,7 @@
       "devDependencies": {
         "@cloudflare/workers-types": "^4.20240117.0",
         "@types/bun": "latest",
+        "@types/node": "^24.0.15",
         "@types/ws": "^8.5.10",
         "bun-types": "^0.1.0",
         "typescript": "^5.3.0",
@@ -188,7 +189,7 @@
 
     "@types/connect": ["@types/connect@3.4.38", "", { "dependencies": { "@types/node": "*" } }, "sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug=="],
 
-    "@types/node": ["@types/node@20.19.7", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-1GM9z6BJOv86qkPvzh2i6VW5+VVrXxCLknfmTkWEqz+6DqosiY28XUWCTmBcJ0ACzKqx/iwdIREfo1fwExIlkA=="],
+    "@types/node": ["@types/node@24.0.15", "", { "dependencies": { "undici-types": "~7.8.0" } }, "sha512-oaeTSbCef7U/z7rDeJA138xpG3NuKc64/rZ2qmUFkFJmnMsAPaluIifqyWd8hSSMxyP9oie3dLAqYPblag9KgA=="],
 
     "@types/pg": ["@types/pg@8.15.4", "", { "dependencies": { "@types/node": "*", "pg-protocol": "*", "pg-types": "^2.2.0" } }, "sha512-I6UNVBAoYbvuWkkU3oosC8yxqH21f4/Jc4DK71JLG3dT2mdlGe1z+ep/LQGXaKaOgcvUrsQoPRqfgtMcvZiJhg=="],
 
@@ -474,7 +475,7 @@
 
     "undici": ["undici@5.29.0", "", { "dependencies": { "@fastify/busboy": "^2.0.0" } }, "sha512-raqeBD6NQK4SkWhQzeYKd1KmIG6dllBOTt55Rmkt4HtI9mwdWtJljnrXjAFUBLTSN67HWrOIZ3EPF4kjUw80Bg=="],
 
-    "undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+    "undici-types": ["undici-types@7.8.0", "", {}, "sha512-9UJ2xGDvQ43tYyVMpuHlsgApydB8ZKfVYTsLDhXkFL/6gfkp+U8xTGdh8pMJv1SpZna0zxG1DwsKZsreLbXBxw=="],
 
     "unenv": ["unenv@2.0.0-rc.14", "", { "dependencies": { "defu": "^6.1.4", "exsolve": "^1.0.1", "ohash": "^2.0.10", "pathe": "^2.0.3", "ufo": "^1.5.4" } }, "sha512-od496pShMen7nOy5VmVJCnq8rptd45vh6Nx/r2iPbrba6pa6p+tS2ywuIHRZ/OBvSbQZB0kWvpO9XBNVFXHD3Q=="],
 
@@ -532,6 +533,12 @@
 
     "@types/bun/bun-types": ["bun-types@1.2.19", "", { "dependencies": { "@types/node": "*" }, "peerDependencies": { "@types/react": "^19" } }, "sha512-uAOTaZSPuYsWIXRpj7o56Let0g/wjihKCkeRqUBhlLVM/Bt+Fj9xTo+LhC1OV1XDaGkz4hNC80et5xgy+9KTHQ=="],
 
+    "@types/connect/@types/node": ["@types/node@20.19.7", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-1GM9z6BJOv86qkPvzh2i6VW5+VVrXxCLknfmTkWEqz+6DqosiY28XUWCTmBcJ0ACzKqx/iwdIREfo1fwExIlkA=="],
+
+    "@types/pg/@types/node": ["@types/node@20.19.7", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-1GM9z6BJOv86qkPvzh2i6VW5+VVrXxCLknfmTkWEqz+6DqosiY28XUWCTmBcJ0ACzKqx/iwdIREfo1fwExIlkA=="],
+
+    "@types/ws/@types/node": ["@types/node@20.19.7", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-1GM9z6BJOv86qkPvzh2i6VW5+VVrXxCLknfmTkWEqz+6DqosiY28XUWCTmBcJ0ACzKqx/iwdIREfo1fwExIlkA=="],
+
     "helius-sdk/bs58": ["bs58@6.0.0", "", { "dependencies": { "base-x": "^5.0.0" } }, "sha512-PD0wEnEYg6ijszw/u8s+iI3H17cTymlrwkKhDhPZq+Sokl3AU4htyBFTjAeNAlCCmg0f53g6ih3jATyCKftTfw=="],
 
     "jayson/@types/node": ["@types/node@12.20.55", "", {}, "sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ=="],
@@ -543,6 +550,8 @@
     "miniflare/ws": ["ws@8.18.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw=="],
 
     "@metaplex-foundation/beet-solana/bs58/base-x": ["base-x@4.0.1", "", {}, "sha512-uAZ8x6r6S3aUM9rbHGVOIsR15U/ZSc82b3ymnCPsT45Gk1DDvhDPdIgB5MrhirZWt+5K0EEPQH985kNqZgNPFw=="],
+
+    "@neondatabase/serverless/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 
     "@solana/codecs-data-structures/@solana/errors/commander": ["commander@12.1.0", "", {}, "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="],
 
@@ -556,10 +565,18 @@
 
     "@types/bun/bun-types/@types/node": ["@types/node@22.16.5", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-bJFoMATwIGaxxx8VJPeM8TonI8t579oRvgAuT8zFugJsJZgzqv0Fu8Mhp68iecjzG7cnN3mO2dJQ5uUM2EFrgQ=="],
 
+    "@types/connect/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+
+    "@types/pg/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+
+    "@types/ws/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+
     "helius-sdk/bs58/base-x": ["base-x@5.0.1", "", {}, "sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg=="],
 
     "@solana/codecs/@solana/codecs-core/@solana/errors/commander": ["commander@12.1.0", "", {}, "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="],
 
     "@solana/codecs/@solana/codecs-numbers/@solana/errors/commander": ["commander@12.1.0", "", {}, "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="],
+
+    "@types/bun/bun-types/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
   }
 }

@@ -10,12 +10,15 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
             <span x-text="showForm ? '▼' : '▶'"></span>
         </button>
         <div x-show="showForm" x-transition>
-        <form @submit.prevent="submitForm">
+        <form id="wallet-form" 
+              hx-post="/htmx/wallets" 
+              hx-target="#toast-container"
+              @submit.prevent="submitForm">
             <div class="grid">
                 <div>
                     <label for="address">
                         Wallet Address *
-                        <input type="text" id="address" x-model="address" required 
+                        <input type="text" id="address" name="address" x-model="address" required 
                                placeholder="Enter Solana wallet address"
                                @input="validateAddress()"
                                :class="{ 'validation-error': addressError }"
@@ -26,7 +29,7 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                 <div>
                     <label for="alias">
                         Alias *
-                        <input type="text" id="alias" x-model="alias" required
+                        <input type="text" id="alias" name="alias" x-model="alias" required
                                placeholder="e.g., Smart Money #1"
                                @input="validateAlias()"
                                :class="{ 'validation-error': aliasError }">
@@ -39,7 +42,7 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                 <div>
                     <label for="tags">
                         Tags * (comma-separated)
-                        <input type="text" id="tags" x-model="tags" required
+                        <input type="text" id="tags" name="tags" x-model="tags" required
                                placeholder="e.g., whale, insider, kol"
                                @input="validateTags()"
                                :class="{ 'validation-error': tagsError }">
@@ -49,7 +52,7 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                 <div>
                     <label for="ui_color">
                         Display Color *
-                        <input type="color" id="ui_color" x-model="ui_color" required>
+                        <input type="color" id="ui_color" name="ui_color" x-model="ui_color" required>
                     </label>
                 </div>
             </div>
@@ -58,14 +61,14 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                 <div>
                     <label for="twitter_handle">
                         Twitter Handle
-                        <input type="text" id="twitter_handle" x-model="twitter_handle" 
+                        <input type="text" id="twitter_handle" name="twitter_handle" x-model="twitter_handle" 
                                placeholder="@username">
                     </label>
                 </div>
                 <div>
                     <label for="telegram_channel">
                         Telegram Channel
-                        <input type="text" id="telegram_channel" x-model="telegram_channel" 
+                        <input type="text" id="telegram_channel" name="telegram_channel" x-model="telegram_channel" 
                                placeholder="t.me/channel">
                     </label>
                 </div>
@@ -75,7 +78,7 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                 <div>
                     <label for="streaming_channel">
                         Streaming Channel
-                        <input type="text" id="streaming_channel" x-model="streaming_channel" 
+                        <input type="text" id="streaming_channel" name="streaming_channel" x-model="streaming_channel" 
                                placeholder="twitch.tv/username or youtube.com/@channel">
                     </label>
                 </div>
@@ -117,6 +120,7 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                                @change="handleImageUpload" 
                                accept="image/*"
                                style="display: none;">
+                        <input type="hidden" name="image_data" :value="image_data">
                     </label>
                 </div>
             </div>
@@ -124,7 +128,7 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
             <div>
                 <label for="notes">
                     Notes
-                    <textarea id="notes" x-model="notes" rows="3" 
+                    <textarea id="notes" name="notes" x-model="notes" rows="3" 
                               placeholder="Additional notes about this wallet..."></textarea>
                 </label>
             </div>
@@ -150,12 +154,15 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                 <a href="#" aria-label="Close" class="close" @click="closeModal()"></a>
             </header>
             
-            <form @submit.prevent="updateWallet">
+            <form id="edit-wallet-form"
+                  hx-put="/htmx/wallets/{address}"
+                  hx-target="#toast-container"
+                  @submit.prevent="updateWallet">
                 <div class="grid">
                     <div>
                         <label for="edit-alias">
                             Alias *
-                            <input type="text" id="edit-alias" x-model="editData.alias" required
+                            <input type="text" id="edit-alias" name="alias" x-model="editData.alias" required
                                    @input="validateEditAlias()"
                                    :class="{ 'validation-error': editAliasError }">
                             <small x-show="editAliasError" x-text="editAliasError" class="error-text"></small>
@@ -164,7 +171,7 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                     <div>
                         <label for="edit-tags">
                             Tags * (comma-separated)
-                            <input type="text" id="edit-tags" x-model="editData.tags" required
+                            <input type="text" id="edit-tags" name="tags" x-model="editData.tags" required
                                    @input="validateEditTags()"
                                    :class="{ 'validation-error': editTagsError }">
                             <small x-show="editTagsError" x-text="editTagsError" class="error-text"></small>
@@ -176,14 +183,14 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                     <div>
                         <label for="edit-twitter">
                             Twitter Handle
-                            <input type="text" id="edit-twitter" x-model="editData.twitter_handle" 
+                            <input type="text" id="edit-twitter" name="twitter_handle" x-model="editData.twitter_handle" 
                                    placeholder="@username">
                         </label>
                     </div>
                     <div>
                         <label for="edit-telegram">
                             Telegram Channel
-                            <input type="text" id="edit-telegram" x-model="editData.telegram_channel" 
+                            <input type="text" id="edit-telegram" name="telegram_channel" x-model="editData.telegram_channel" 
                                    placeholder="t.me/channel">
                         </label>
                     </div>
@@ -193,14 +200,14 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                     <div>
                         <label for="edit-streaming">
                             Streaming Channel
-                            <input type="text" id="edit-streaming" x-model="editData.streaming_channel" 
+                            <input type="text" id="edit-streaming" name="streaming_channel" x-model="editData.streaming_channel" 
                                    placeholder="twitch.tv/username">
                         </label>
                     </div>
                     <div>
                         <label for="edit-color">
                             Display Color
-                            <input type="color" id="edit-color" x-model="editData.ui_color">
+                            <input type="color" id="edit-color" name="ui_color" x-model="editData.ui_color">
                         </label>
                     </div>
                 </div>
@@ -244,13 +251,14 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                                    @change="handleEditImageUpload" 
                                    accept="image/*"
                                    style="display: none;">
+                            <input type="hidden" name="image_data" :value="editData.image_data">
                         </label>
                     </div>
                     <div>
                         <label>
                             Status
                             <label for="edit-active">
-                                <input type="checkbox" id="edit-active" x-model="editData.is_active" role="switch">
+                                <input type="checkbox" id="edit-active" name="is_active" x-model="editData.is_active" role="switch">
                                 Active
                             </label>
                         </label>
@@ -260,7 +268,7 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                 <div>
                     <label for="edit-notes">
                         Notes
-                        <textarea id="edit-notes" x-model="editData.notes" rows="3"></textarea>
+                        <textarea id="edit-notes" name="notes" x-model="editData.notes" rows="3"></textarea>
                     </label>
                 </div>
                 

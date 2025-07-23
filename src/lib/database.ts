@@ -131,8 +131,10 @@ export class Database {
 
   constructor() {
     if (!ENV.DATABASE_URL) {
+      console.error('DATABASE_URL not found in ENV:', ENV);
       throw new Error('DATABASE_URL environment variable is required');
     }
+    console.log('Database initialized with URL:', ENV.DATABASE_URL.substring(0, 30) + '...');
     this.sql = neon(ENV.DATABASE_URL);
   }
 
@@ -143,6 +145,8 @@ export class Database {
     tagFilter?: string[]
   ): Promise<TrackedWallet[]> {
     try {
+      console.log('getTrackedWallets called with:', { sortBy, sortOrder, tagFilter });
+      
       // Build safe query based on parameters
       const validColumns = ['created_at', 'alias', 'is_active', 'sol_balance'];
       const safeSort = (sortBy && validColumns.includes(sortBy)) ? sortBy : 'created_at';
@@ -150,15 +154,51 @@ export class Database {
       
       let result;
       if (!tagFilter || tagFilter.length === 0) {
-        // Use sql.unsafe for dynamic column names (safe because we validate the column)
-        result = await this.sql.unsafe(`SELECT * FROM tracked_wallets ORDER BY ${safeSort} ${safeOrder}`);
+        // Use sql directly with template literal
+        console.log('Executing query without tag filter');
+        // For dynamic sorting, we need to use a workaround since Neon doesn't support sql.unsafe
+        if (safeSort === 'alias') {
+          result = safeOrder === 'ASC' 
+            ? await this.sql`SELECT * FROM tracked_wallets ORDER BY alias ASC`
+            : await this.sql`SELECT * FROM tracked_wallets ORDER BY alias DESC`;
+        } else if (safeSort === 'is_active') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM tracked_wallets ORDER BY is_active ASC`
+            : await this.sql`SELECT * FROM tracked_wallets ORDER BY is_active DESC`;
+        } else if (safeSort === 'sol_balance') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM tracked_wallets ORDER BY sol_balance ASC`
+            : await this.sql`SELECT * FROM tracked_wallets ORDER BY sol_balance DESC`;
+        } else {
+          // Default to created_at
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM tracked_wallets ORDER BY created_at ASC`
+            : await this.sql`SELECT * FROM tracked_wallets ORDER BY created_at DESC`;
+        }
       } else {
         // With tag filter
-        result = await this.sql.unsafe(
-          `SELECT * FROM tracked_wallets WHERE tags && $1 ORDER BY ${safeSort} ${safeOrder}`,
-          [tagFilter]
-        );
+        console.log('Executing query with tag filter:', tagFilter);
+        if (safeSort === 'alias') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM tracked_wallets WHERE tags && ${tagFilter} ORDER BY alias ASC`
+            : await this.sql`SELECT * FROM tracked_wallets WHERE tags && ${tagFilter} ORDER BY alias DESC`;
+        } else if (safeSort === 'is_active') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM tracked_wallets WHERE tags && ${tagFilter} ORDER BY is_active ASC`
+            : await this.sql`SELECT * FROM tracked_wallets WHERE tags && ${tagFilter} ORDER BY is_active DESC`;
+        } else if (safeSort === 'sol_balance') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM tracked_wallets WHERE tags && ${tagFilter} ORDER BY sol_balance ASC`
+            : await this.sql`SELECT * FROM tracked_wallets WHERE tags && ${tagFilter} ORDER BY sol_balance DESC`;
+        } else {
+          // Default to created_at
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM tracked_wallets WHERE tags && ${tagFilter} ORDER BY created_at ASC`
+            : await this.sql`SELECT * FROM tracked_wallets WHERE tags && ${tagFilter} ORDER BY created_at DESC`;
+        }
       }
+      
+      console.log('Query result:', result?.length, 'wallets found');
       
       // Ensure we always return an array
       return Array.isArray(result) ? result : [];
@@ -371,13 +411,17 @@ export class Database {
   }
 
   // Generic query method for custom operations
-  async query(queryString: string, params: any[] = []): Promise<any[]> {
-    return await this.sql.unsafe(queryString, params);
+  async query(queryString: string, params: any[] = []): Promise<{ rows: any[] }> {
+    const rows = await this.sql.unsafe(queryString, params);
+    return { rows };
   }
 }
 
 // Export database instance
 export const database = new Database();
+
+// Export getDatabase function for compatibility
+export const getDatabase = () => database;
 
 // Export all database functions for compatibility with frontend
 export const getTrackedWallets = (sortBy?: string, sortOrder?: 'asc' | 'desc', tagFilter?: string[]) => 

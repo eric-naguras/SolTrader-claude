@@ -17,7 +17,7 @@ async function loadRecentTrades() {
         console.log('Loading recent trades...');
         const response = await fetch('/api/trades?limit=100', {
             headers: {
-                'X-API-Key': window.CONFIG.API_KEY
+                'X-API-Key': window.CONFIG?.API_KEY || 'test-api-key'
             }
         });
         
