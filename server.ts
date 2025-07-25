@@ -182,7 +182,9 @@ app.get('/', (c: Context) => {
 
 // Serve pages (both direct access and HTMX)
 app.get('/wallets', (c: Context) => {
-  return servePage(c, walletsPage());
+  // Extract query parameters for filter persistence
+  const { sortBy, sortOrder, tags } = c.req.query();
+  return servePage(c, walletsPage({ sortBy, sortOrder, tags }));
 });
 
 app.get('/trades', (c: Context) => {
@@ -220,7 +222,7 @@ app.get('/htmx/logging-config', async (c: Context) => {
     );
     
     let logCategories;
-    if (result.rows.length === 0) {
+    if (!result.rows || result.rows.length === 0 || !result.rows[0] || !result.rows[0].log_categories) {
       // Return default configuration if not found
       logCategories = {
         connection: true,
@@ -275,29 +277,13 @@ app.put('/htmx/logging-config', async (c: Context) => {
     // Publish configuration change via message bus
     messageBus.publish('logging_config_changed', { log_categories: logCategories });
     
-    // Return success message
-    return c.html(`
-      <div class="toast success" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
-        ✅ Logging configuration updated
-      </div>
-      <script>
-        setTimeout(() => {
-          document.querySelector('.toast').remove();
-        }, 3000);
-      </script>
-    `);
+    // Return empty response - the toggle switch will maintain its state
+    return c.html('');
   } catch (error) {
     console.error('Failed to update logging settings:', error);
-    return c.html(`
-      <div class="toast error" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
-        ❌ Failed to update configuration
-      </div>
-      <script>
-        setTimeout(() => {
-          document.querySelector('.toast').remove();
-        }, 3000);
-      </script>
-    `, 500);
+    // Return error response with HTMX error header
+    c.header('HX-Reswap', 'innerHTML');
+    return c.html('<div class="error">Failed to update configuration</div>', 500);
   }
 });
 
@@ -541,7 +527,7 @@ app.get('/htmx/settings/ui', async (c: Context) => {
     );
     
     let config;
-    if (result.rows.length === 0) {
+    if (!result.rows || result.rows.length === 0 || !result.rows[0] || !result.rows[0].ui_refresh_config) {
       config = {
         balance_interval_minutes: 5,
         auto_refresh_enabled: true,
@@ -553,7 +539,7 @@ app.get('/htmx/settings/ui', async (c: Context) => {
     }
     
     return c.html(`
-      <form hx-put="/htmx/settings/ui" hx-target="#toast-container">
+      <form hx-put="/htmx/settings/ui" hx-target="#ui-refresh-tab #toast-container">
         <div>
           <label for="balance-interval">
             Balance Refresh Interval (minutes)
@@ -628,24 +614,13 @@ app.put('/htmx/settings/ui', async (c: Context) => {
     // Publish configuration change via message bus
     messageBus.publish('ui_config_changed', { ui_refresh_config: uiConfig });
     
-    return c.html(`
-      <div class="toast success">
-        ✅ UI settings updated successfully
-      </div>
-      <script>
-        setTimeout(() => document.querySelector('.toast').remove(), 3000);
-      </script>
-    `);
+    // Return empty response - form elements will maintain their state
+    return c.html('');
   } catch (error) {
     console.error('Failed to update UI settings:', error);
-    return c.html(`
-      <div class="toast error">
-        ❌ Failed to update UI settings
-      </div>
-      <script>
-        setTimeout(() => document.querySelector('.toast').remove(), 3000);
-      </script>
-    `, 500);
+    // Return error response with HTMX error header
+    c.header('HX-Reswap', 'innerHTML');
+    return c.html('<div class="error">Failed to update UI settings</div>', 500);
   }
 });
 
@@ -949,6 +924,8 @@ app.get('/htmx/partials/wallets-table', async (c: Context) => {
   try {
     console.log('wallets-table endpoint called');
     const { sortBy, sortOrder, tags } = c.req.query();
+    console.log('[Server] Query params:', { sortBy, sortOrder, tags });
+    console.log('[Server] tags type:', typeof tags, 'tags value:', JSON.stringify(tags));
     const validSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
     
     // Get all wallets to extract all available tags
@@ -969,11 +946,14 @@ app.get('/htmx/partials/wallets-table', async (c: Context) => {
       }
     });
     
-    // Parse selected tags - if no tags parameter, default to ALL tags (show all wallets)
+    // Parse selected tags
     let selectedTags: string[] = [];
-    if (tags === undefined || tags === '') {
+    if (tags === undefined) {
       // No filter specified = show all wallets (all tags selected)
       selectedTags = Array.from(allTags);
+    } else if (tags === '') {
+      // Empty string = no tags selected = show no wallets
+      selectedTags = [];
     } else {
       // Parse the tags parameter
       selectedTags = tags.split(',').filter(Boolean);
@@ -1013,6 +993,9 @@ async function initialize() {
   // Setup static file serving
   await setupStaticFiles();
   
+  // Small delay to ensure database is ready
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  
   // Start backend services
   console.log('🚀 Starting Sonar Platform...');
   await serviceManager.start();
@@ -1032,4 +1015,5 @@ console.log(`📊 Dashboard: http://localhost:${port}`);
 export default {
   port,
   fetch: app.fetch,
+  idleTimeout: 255 // Maximum allowed timeout for Bun (about 4.25 minutes)
 };

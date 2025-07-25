@@ -36,20 +36,36 @@ export class ServiceManager {
     this.services.set('signal-analyzer', new SignalAnalyzer(messageBus));
     this.services.set('signal-trader', new SignalTrader(messageBus));
 
-    // Initialize service statuses
+    // Initialize service statuses and enabled states
     for (const [name] of this.services) {
       this.serviceStatuses.set(name, {
         name,
         status: 'stopped'
       });
+      // Default all services to enabled until we load configs
+      this.serviceEnabledState.set(name, true);
     }
   }
 
   async start() {
     this.logger.system('Starting all services...');
 
-    // Load service configs to check which are enabled
-    await this.loadServiceConfigs();
+    try {
+      // Load service configs to check which are enabled
+      await this.loadServiceConfigs();
+    } catch (error) {
+      this.logger.error('Failed to load service configurations, using defaults:', error);
+    }
+
+    // Initialize service statuses based on enabled state
+    for (const [name, isEnabled] of this.serviceEnabledState) {
+      if (!isEnabled) {
+        this.serviceStatuses.set(name, {
+          name,
+          status: 'disabled'
+        });
+      }
+    }
 
     // Start services in dependency order
     const startOrder = [
@@ -60,7 +76,11 @@ export class ServiceManager {
     ];
 
     for (const serviceName of startOrder) {
-      await this.startService(serviceName);
+      try {
+        await this.startService(serviceName);
+      } catch (error) {
+        this.logger.error(`Failed to start service ${serviceName}:`, error);
+      }
     }
 
     this.logger.system('All services started');
@@ -101,7 +121,7 @@ export class ServiceManager {
       this.logger.system(`[ServiceManager] Service ${name} is disabled, skipping start`);
       this.serviceStatuses.set(name, {
         name,
-        status: 'stopped'
+        status: 'disabled'
       });
       return;
     }
@@ -198,15 +218,19 @@ export class ServiceManager {
   }
 
   getAllServiceStatuses(): ServiceManagerStatus[] {
-    // Get real-time status from services
+    // Get real-time status from services for running services
     for (const [name, service] of this.services) {
-      const serviceStatus = service.getStatus();
-      this.serviceStatuses.set(name, {
-        name,
-        status: serviceStatus.running ? 'running' : 'stopped',
-        error: serviceStatus.error,
-        lastHeartbeat: serviceStatus.lastHeartbeat
-      });
+      // Only update status for services that are not disabled
+      const isEnabled = this.serviceEnabledState.get(name);
+      if (isEnabled) {
+        const serviceStatus = service.getStatus();
+        this.serviceStatuses.set(name, {
+          name,
+          status: serviceStatus.running ? 'running' : 'stopped',
+          error: serviceStatus.error,
+          lastHeartbeat: serviceStatus.lastHeartbeat
+        });
+      }
     }
     return Array.from(this.serviceStatuses.values());
   }
@@ -225,10 +249,11 @@ export class ServiceManager {
     this.logger.system('=== Service Status ===');
     for (const [name, status] of this.serviceStatuses) {
       const emoji = status.status === 'running' ? '✅' : 
-                   status.status === 'error' ? '❌' : '⏹️';
-      console.log(`${emoji} ${name}: ${status.status}`);
+                   status.status === 'error' ? '❌' : 
+                   status.status === 'disabled' ? '⏸️' : '⏹️';
+      this.logger.system(`${emoji} ${name}: ${status.status}`);
       if (status.error) {
-        console.log(`   Error: ${status.error}`);
+        this.logger.system(`   Error: ${status.error}`);
       }
     }
     this.logger.system('====================');
@@ -290,15 +315,26 @@ export class ServiceManager {
       }
       
       // Update enabled state from database
-      for (const config of configs) {
-        // Find the service name key for this database name
-        const serviceKey = Object.entries(serviceNameMapping).find(
-          ([_, dbName]) => dbName === config.service_name
-        )?.[0];
-        
-        if (serviceKey) {
-          this.serviceEnabledState.set(serviceKey, config.enabled);
-          this.logger.system(`[ServiceManager] Service ${serviceKey} is ${config.enabled ? 'enabled' : 'disabled'}`);
+      if (configs && configs.length > 0) {
+        for (const config of configs) {
+          // Find the service name key for this database name
+          const serviceKey = Object.entries(serviceNameMapping).find(
+            ([_, dbName]) => dbName === config.service_name
+          )?.[0];
+          
+          if (serviceKey) {
+            this.serviceEnabledState.set(serviceKey, config.enabled);
+            this.logger.system(`[ServiceManager] Service ${serviceKey} is ${config.enabled ? 'enabled' : 'disabled'}`);
+          }
+        }
+      } else {
+        this.logger.system('[ServiceManager] No service configurations found in database, using defaults (all enabled)');
+      }
+      
+      // Log status of all services
+      for (const [serviceName, isEnabled] of this.serviceEnabledState) {
+        if (!isEnabled) {
+          // This logging is now handled in startService method to avoid duplication
         }
       }
     } catch (error) {

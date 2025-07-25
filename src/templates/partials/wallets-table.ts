@@ -152,9 +152,23 @@ export function walletsTablePartial(wallets: TrackedWallet[], sortBy: string = '
     const buildSortableTh = (key: string, label: string) => {
         const isCurrentSort = key === sortBy;
         const newSortOrderForHeader = isCurrentSort ? (sortOrder === 'asc' ? 'desc' : 'asc') : 'asc';
-        const currentTagsParam = selectedTags.length > 0 ? `&tags=${selectedTags.join(',')}` : '';
+        // Handle tag parameters properly for URL persistence
+        let currentTagsParam = '';
+        if (selectedTags.length === 0) {
+            // No tags selected - explicitly pass empty tags parameter
+            currentTagsParam = '&tags=';
+        } else if (selectedTags.length < allTags.length) {
+            // Some tags selected - pass the selected tags
+            currentTagsParam = `&tags=${selectedTags.join(',')}`;
+        }
+        // If all tags selected, don't add tags parameter (default behavior)
+        const sortUrl = `/htmx/partials/wallets-table?sortBy=${key}&sortOrder=${newSortOrderForHeader}${currentTagsParam}`;
+        const pageUrl = `/wallets?sortBy=${key}&sortOrder=${newSortOrderForHeader}${currentTagsParam}`;
+        
         return `
-            <th hx-get="/htmx/partials/wallets-table?sortBy=${key}&sortOrder=${newSortOrderForHeader}${currentTagsParam}" class="sortable">
+            <th hx-get="${sortUrl}" 
+                hx-on::after-request="if(window.location.pathname === '/wallets') { window.history.replaceState(null, '', '${pageUrl}'); }"
+                class="sortable">
               ${label} ${renderSortIcon(isCurrentSort, sortOrder)}
             </th>
         `;

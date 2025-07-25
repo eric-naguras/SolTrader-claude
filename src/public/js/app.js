@@ -296,19 +296,10 @@ document.addEventListener('alpine:init', () => {
             this.validateEditTags();
         },
         
-        updateWallet() {
-            // Final validation before submit
-            this.validateEditAll();
-            
-            if (!this.isEditFormValid) {
-                showToast('Please fix validation errors before saving', 'error');
-                return;
-            }
-            
-            // Use HTMX to submit the form
-            const form = document.getElementById('edit-wallet-form');
-            if (form) {
-                htmx.trigger(form, 'submit');
+        closeModal() {
+            const modal = document.getElementById('edit-wallet-modal');
+            if (modal) {
+                modal.close();
             }
         }
     }));
@@ -543,20 +534,32 @@ document.addEventListener('alpine:init', () => {
             this.allTags = Array.from(interactiveCheckboxes).map(cb => cb.value).filter(Boolean);
             
             // Initialize selected tags based on initially checked checkboxes
-            // If all are checked (or none specified), we have all selected
             const checkedTags = Array.from(interactiveCheckboxes)
                 .filter(cb => cb.checked)
                 .map(cb => cb.value);
             
-            // If all tags are checked or no specific selection, select all
-            if (checkedTags.length === this.allTags.length || checkedTags.length === 0) {
+            // Set selected tags based on what's actually checked
+            // The server renders checkboxes as checked based on the current filter state
+            if (checkedTags.length === this.allTags.length) {
+                // All tags are checked = all selected
                 this.selectedTags = [...this.allTags];
+            } else if (checkedTags.length === 0) {
+                // No tags are checked = none selected  
+                this.selectedTags = [];
             } else {
+                // Some tags are checked = partial selection
                 this.selectedTags = checkedTags;
             }
             
-            // Initialize applied tags to match selected tags
+            // Initialize applied tags to match selected tags (this represents the current server state)
             this.appliedTags = [...this.selectedTags];
+            
+            console.log('[TagFilter] Initialized:', {
+                allTags: this.allTags,
+                checkedTags: checkedTags,
+                selectedTags: this.selectedTags,
+                appliedTags: this.appliedTags
+            });
         },
         
         toggleTag(tag) {
@@ -606,21 +609,44 @@ document.addEventListener('alpine:init', () => {
             urlParams.set('sortBy', currentSortBy);
             urlParams.set('sortOrder', currentSortOrder);
             
-            // Add selected tags only if not all tags are selected
-            // If all tags are selected, don't send tags parameter (server will default to showing all)
-            if (this.selectedTags.length > 0 && this.selectedTags.length < this.allTags.length) {
-                urlParams.set('tags', this.selectedTags.join(','));
-            } else if (this.selectedTags.length === 0) {
-                // Explicitly set empty to show no wallets
-                urlParams.set('tags', '');
-            }
-            // If selectedTags.length === allTags.length, don't set tags parameter (show all)
+            // Debug logging
+            console.log('[TagFilter] Applying filters:', {
+                selectedTags: this.selectedTags,
+                allTags: this.allTags,
+                selectedCount: this.selectedTags.length,
+                allCount: this.allTags.length
+            });
             
-            // Trigger HTMX request to reload table with filters
-            htmx.ajax('GET', `/htmx/partials/wallets-table?${urlParams.toString()}`, {
+            // Handle tag filtering logic
+            if (this.selectedTags.length === 0) {
+                // No tags selected = show no wallets (send empty string)
+                urlParams.set('tags', '');
+                console.log('[TagFilter] No tags selected, sending empty string');
+            } else if (this.selectedTags.length === this.allTags.length) {
+                // All tags selected = show all wallets (don't send tags parameter)
+                // Don't set tags parameter, server will default to showing all
+                console.log('[TagFilter] All tags selected, not sending tags parameter');
+            } else {
+                // Some tags selected = filter by selected tags
+                urlParams.set('tags', this.selectedTags.join(','));
+                console.log('[TagFilter] Some tags selected:', this.selectedTags.join(','));
+            }
+            
+            const finalUrl = `/htmx/partials/wallets-table?${urlParams.toString()}`;
+            console.log('[TagFilter] Final URL:', finalUrl);
+            
+            // Use htmx.ajax directly to ensure the request is made with correct parameters
+            htmx.ajax('GET', finalUrl, {
                 target: '#wallets-table',
                 swap: 'innerHTML'
             });
+            
+            // Update the browser URL for persistence (only if we're on the wallets page)
+            if (window.location.pathname === '/wallets') {
+                const pageUrl = `/wallets${urlParams.toString() ? '?' + urlParams.toString() : ''}`;
+                window.history.replaceState(null, '', pageUrl);
+                console.log('[TagFilter] Updated URL:', pageUrl);
+            }
             
             // Update applied tags to match current selection
             this.appliedTags = [...this.selectedTags];

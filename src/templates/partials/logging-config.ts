@@ -25,7 +25,7 @@ export const loggingConfigTemplate = (config: Record<string, boolean>) => `
       <p>Toggle which events appear in the console logs</p>
     </header>
     
-    <form hx-put="/htmx/logging-config" hx-trigger="change" hx-target="#toast-container">
+    <form hx-put="/htmx/logging-config" hx-trigger="change" hx-target="#logging-tab #toast-container">
       <div class="logging-grid">
         ${logCategories.map(category => `
           <div class="log-category-item">

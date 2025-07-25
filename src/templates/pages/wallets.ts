@@ -1,4 +1,14 @@
-export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="init()">
+export const walletsPage = (params: { sortBy?: string, sortOrder?: string, tags?: string } = {}) => {
+  // Build query string for initial load with any provided parameters
+  const queryParams = new URLSearchParams();
+  if (params.sortBy) queryParams.set('sortBy', params.sortBy);
+  if (params.sortOrder) queryParams.set('sortOrder', params.sortOrder);
+  if (params.tags !== undefined) queryParams.set('tags', params.tags); // Include empty string
+  
+  const queryString = queryParams.toString();
+  const initialUrl = queryString ? `/htmx/partials/wallets-table?${queryString}` : '/htmx/partials/wallets-table';
+  
+  return /*html*/ `<section x-data="walletForm" x-init="init()"
     
     <!-- Add Wallet Form -->
     <div>
@@ -142,7 +152,7 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
     </div>
 
     <!-- Wallets Table -->
-    <div id="wallets-table" hx-get="/htmx/partials/wallets-table" hx-trigger="load, refresh">
+    <div id="wallets-table" hx-get="${initialUrl}" hx-trigger="load, refresh">
         <article aria-busy="true">Loading wallets...</article>
     </div>
     
@@ -157,7 +167,8 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
             <form id="edit-wallet-form"
                   hx-put="/htmx/wallets/{address}"
                   hx-target="#toast-container"
-                  @submit.prevent="updateWallet">
+                  hx-trigger="submit"
+                  @submit="if(!isEditFormValid) { $event.preventDefault(); showToast('Please fix validation errors before saving', 'error'); }"
                 <div class="grid">
                     <div>
                         <label for="edit-alias">
@@ -274,11 +285,15 @@ export const walletsPage = () => /*html*/ `<section x-data="walletForm" x-init="
                 
                 <footer>
                     <div class="grid">
-                        <button type="submit" :disabled="!isEditFormValid" :class="{ 'disabled': !isEditFormValid }">Save Changes</button>
+                        <button type="submit" :disabled="!isEditFormValid" :class="{ 'disabled': !isEditFormValid }" @click="validateEditAll()">Save Changes</button>
                         <button type="button" class="secondary" @click="closeModal()">Cancel</button>
                     </div>
                 </footer>
             </form>
         </article>
     </dialog>
+    
+    <!-- Toast Container for notifications -->
+    <div id="toast-container"></div>
 </section>`;
+};

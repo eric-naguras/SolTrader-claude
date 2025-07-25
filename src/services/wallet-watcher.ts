@@ -5,6 +5,7 @@ import { ENV } from '../lib/env.js';
 import { Service, ServiceStatus } from '../lib/service-interface.js';
 import { MessageBus } from '../lib/message-bus.js';
 import WebSocket from 'ws';
+import { getMultipleWalletBalances } from '../lib/solscan.js';
 
 export class WalletWatcher implements Service {
   readonly name = 'WalletWatcher';
@@ -23,6 +24,13 @@ export class WalletWatcher implements Service {
   private multiWhalePositions: Map<string, Set<string>> = new Map();
   private isRunning: boolean = false;
   private unsubscribers: (() => void)[] = [];
+  private balanceUpdateInterval?: number;
+  private uiRefreshConfig: any = {
+    balance_interval_minutes: 5,
+    auto_refresh_enabled: true,
+    pause_on_activity: true,
+    show_refresh_indicators: true
+  };
 
   constructor(messageBus: MessageBus) {
     const heliusApiKey = ENV.HELIUS_API_KEY;
@@ -53,6 +61,9 @@ export class WalletWatcher implements Service {
       } else {
         this.logger.wallet('[WalletWatcher] No active wallets to track. Waiting for wallets to be added...');
       }
+      
+      // Set up periodic balance updates
+      this.setupBalanceUpdates();
       
       // Update heartbeat periodically
       setInterval(() => this.updateHeartbeat(), 30000);
@@ -128,6 +139,85 @@ export class WalletWatcher implements Service {
 
     this.messageBus.subscribe('wallet_updated', walletUpdatedHandler);
     this.unsubscribers.push(() => this.messageBus.unsubscribe('wallet_updated', walletUpdatedHandler));
+    
+    // Listen for UI config changes
+    const uiConfigChangedHandler = (data: any) => {
+      this.logger.system('[WalletWatcher] Received ui_config_changed event');
+      this.uiRefreshConfig = data.ui_refresh_config;
+      
+      // Clear existing interval and set up new one with updated config
+      if (this.balanceUpdateInterval) {
+        clearInterval(this.balanceUpdateInterval);
+      }
+      this.setupBalanceUpdates();
+    };
+
+    this.messageBus.subscribe('ui_config_changed', uiConfigChangedHandler);
+    this.unsubscribers.push(() => this.messageBus.unsubscribe('ui_config_changed', uiConfigChangedHandler));
+  }
+
+  private setupBalanceUpdates(): void {
+    // Clear existing interval if any
+    if (this.balanceUpdateInterval) {
+      clearInterval(this.balanceUpdateInterval);
+      this.balanceUpdateInterval = undefined;
+    }
+    
+    // Set up new interval based on UI config
+    if (this.uiRefreshConfig.auto_refresh_enabled) {
+      const intervalMinutes = Math.max(1, Math.min(60, this.uiRefreshConfig.balance_interval_minutes || 5));
+      const intervalMs = intervalMinutes * 60 * 1000;
+      
+      this.balanceUpdateInterval = setInterval(() => {
+        if (this.isRunning && !this.isShuttingDown) {
+          this.updateWalletBalances();
+        }
+      }, intervalMs);
+      
+      this.logger.system(`[WalletWatcher] Balance updates scheduled every ${intervalMinutes} minutes`);
+    } else {
+      this.logger.system('[WalletWatcher] Balance updates disabled by UI config');
+    }
+  }
+
+  private async updateWalletBalances(): Promise<void> {
+    if (this.trackedWallets.size === 0) {
+      return;
+    }
+    
+    try {
+      this.logger.system(`[WalletWatcher] Updating balances for ${this.trackedWallets.size} wallets`);
+      
+      // Get all wallet addresses
+      const addresses = Array.from(this.trackedWallets.keys());
+      
+      // Fetch balances from Solscan
+      const balances = await getMultipleWalletBalances(addresses);
+      
+      // Update database with new balances
+      for (const [address, balance] of Object.entries(balances)) {
+        if (balance !== null) {
+          await database.updateWalletBalance(address, balance);
+          
+          // Update in-memory wallet data
+          const wallet = this.trackedWallets.get(address);
+          if (wallet) {
+            wallet.sol_balance = balance;
+            wallet.last_balance_check = new Date().toISOString();
+          }
+        }
+      }
+      
+      this.logger.system(`[WalletWatcher] Updated balances for ${Object.keys(balances).length} wallets`);
+      
+      // Publish update event to refresh UI
+      this.messageBus.publish('wallet_balances_updated', { 
+        timestamp: new Date().toISOString(),
+        updatedCount: Object.keys(balances).length
+      });
+    } catch (error) {
+      this.logger.error('[WalletWatcher] Error updating wallet balances:', error);
+    }
   }
 
   private async loadTrackedWallets() {

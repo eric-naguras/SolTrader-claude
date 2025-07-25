@@ -137,6 +137,21 @@ export class Database {
     }
     console.log('Database initialized with URL:', ENV.DATABASE_URL.substring(0, 30) + '...');
     this.sql = neon(ENV.DATABASE_URL);
+    
+    // Test database connection
+    this.testConnection().catch(error => {
+      console.error('Database connection test failed:', error);
+    });
+  }
+
+  async testConnection() {
+    try {
+      await this.sql`SELECT 1`;
+      console.log('Database connection test successful');
+    } catch (error) {
+      console.error('Database connection test failed:', error);
+      throw error;
+    }
   }
 
   // Tracked Wallets
@@ -401,7 +416,13 @@ export class Database {
   }
 
   async getAllServiceConfigs(): Promise<ServiceConfig[]> {
-    return await this.sql`SELECT * FROM service_configs ORDER BY service_name ASC`;
+    try {
+      const result = await this.sql`SELECT * FROM service_configs ORDER BY service_name ASC`;
+      return result;
+    } catch (error) {
+      console.error('Error getting service configs:', error);
+      return []; // Return empty array on error
+    }
   }
 
   async updateServiceEnabled(serviceName: string, enabled: boolean): Promise<void> {

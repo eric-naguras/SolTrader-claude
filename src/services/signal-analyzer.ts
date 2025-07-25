@@ -12,12 +12,12 @@ export class SignalAnalyzer implements Service {
 
   constructor(private messageBus: MessageBus) {
     this.logger = new Logger('signal-analyzer');
-    this.logger.system('Initialized signal analyzer');
+    this.logger.system('[SignalAnalyzer] Initialized');
   }
 
   async start() {
     try {
-      this.logger.system('Starting signal analyzer...');
+      this.logger.system('[SignalAnalyzer] Starting...');
       this.isRunning = true;
       
       // Run analysis every 5 minutes
@@ -26,15 +26,15 @@ export class SignalAnalyzer implements Service {
       // Update heartbeat periodically
       setInterval(() => this.updateHeartbeat(), 30000);
       
-      this.logger.system('Signal analyzer started successfully');
+      this.logger.system('[SignalAnalyzer] Started successfully');
     } catch (error) {
-      this.logger.error('Failed to start signal analyzer:', error);
+      this.logger.error('[SignalAnalyzer] Failed to start:', error);
       throw error;
     }
   }
 
   async stop() {
-    this.logger.system('Stopping signal analyzer...');
+    this.logger.system('[SignalAnalyzer] Stopping...');
     this.isRunning = false;
     
     if (this.analysisInterval) {
@@ -150,7 +150,7 @@ export class SignalAnalyzer implements Service {
         await this.createTradeSignal(token, minWhales);
       }
       
-      this.logger.system(`Analysis complete. Found ${multiWhaleTokens.length} potential signals`);
+      this.logger.system(`[SignalAnalyzer] Analysis complete. Found ${multiWhaleTokens.length} potential signals`);
     } catch (error) {
       this.logger.error('Error during periodic analysis:', error);
     }
@@ -251,7 +251,7 @@ export class SignalAnalyzer implements Service {
 
   // Manual trigger for analysis (called from service manager)
   async triggerAnalysis() {
-    this.logger.system('Manual analysis triggered...');
+    this.logger.system('[SignalAnalyzer] Manual analysis triggered...');
     await this.runPeriodicAnalysis();
   }
 
@@ -280,7 +280,7 @@ export class SignalAnalyzer implements Service {
       // Analyze patterns
       const analysis = this.analyzeTradePatterns(trades);
       
-      this.logger.system(`Historical analysis: ${analysis.totalTrades} trades, ${analysis.winRate}% win rate`);
+      this.logger.system(`[SignalAnalyzer] Historical analysis: ${analysis.totalTrades} trades, ${analysis.winRate}% win rate`);
       return analysis;
     } catch (error) {
       this.logger.error('Error analyzing historical performance:', error);
