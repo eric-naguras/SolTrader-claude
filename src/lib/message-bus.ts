@@ -13,6 +13,10 @@ export type MessageBusEvent =
   | 'service_stopped'
   | 'service_restarted'
   | 'service_error'
+  | 'service_enable_requested'
+  | 'service_disable_requested'
+  | 'service_enabled'
+  | 'service_disabled'
   // Trading events
   | 'trading_enabled'
   | 'trading_disabled'
@@ -31,6 +35,10 @@ export interface MessageBusEventData {
   service_stopped: { serviceName: string };
   service_restarted: { serviceName: string };
   service_error: { serviceName: string; error: string };
+  service_enable_requested: { serviceName: string };
+  service_disable_requested: { serviceName: string };
+  service_enabled: { serviceName: string };
+  service_disabled: { serviceName: string };
   trading_enabled: {};
   trading_disabled: {};
   analysis_triggered: {};

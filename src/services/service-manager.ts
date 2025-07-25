@@ -18,6 +18,7 @@ interface ServiceManagerStatus {
 export class ServiceManager {
   private services: Map<string, Service> = new Map();
   private serviceStatuses: Map<string, ServiceManagerStatus> = new Map();
+  private serviceEnabledState: Map<string, boolean> = new Map();
   private isShuttingDown = false;
   private logger: Logger;
 
@@ -46,6 +47,9 @@ export class ServiceManager {
 
   async start() {
     this.logger.system('Starting all services...');
+
+    // Load service configs to check which are enabled
+    await this.loadServiceConfigs();
 
     // Start services in dependency order
     const startOrder = [
@@ -88,6 +92,17 @@ export class ServiceManager {
     const service = this.services.get(name);
     if (!service) {
       this.logger.error(`[ServiceManager] Service ${name} not found`);
+      return;
+    }
+
+    // Check if service is enabled
+    const isEnabled = this.serviceEnabledState.get(name);
+    if (!isEnabled) {
+      this.logger.system(`[ServiceManager] Service ${name} is disabled, skipping start`);
+      this.serviceStatuses.set(name, {
+        name,
+        status: 'stopped'
+      });
       return;
     }
 
@@ -256,6 +271,45 @@ export class ServiceManager {
     }
   }
 
+  private async loadServiceConfigs() {
+    try {
+      const db = await getDatabase();
+      const configs = await db.getAllServiceConfigs();
+      
+      // Map service names from class names to database names
+      const serviceNameMapping: Record<string, string> = {
+        'wallet-watcher': 'WalletWatcher',
+        'paper-trader': 'PaperTrader',
+        'signal-analyzer': 'SignalAnalyzer',
+        'signal-trader': 'SignalTrader'
+      };
+      
+      // Set default enabled state for all services
+      for (const [serviceName] of this.services) {
+        this.serviceEnabledState.set(serviceName, true);
+      }
+      
+      // Update enabled state from database
+      for (const config of configs) {
+        // Find the service name key for this database name
+        const serviceKey = Object.entries(serviceNameMapping).find(
+          ([_, dbName]) => dbName === config.service_name
+        )?.[0];
+        
+        if (serviceKey) {
+          this.serviceEnabledState.set(serviceKey, config.enabled);
+          this.logger.system(`[ServiceManager] Service ${serviceKey} is ${config.enabled ? 'enabled' : 'disabled'}`);
+        }
+      }
+    } catch (error) {
+      this.logger.error('Failed to load service configurations:', error);
+      // Default to all services enabled on error
+      for (const [serviceName] of this.services) {
+        this.serviceEnabledState.set(serviceName, true);
+      }
+    }
+  }
+
   private async loadLogConfiguration() {
     try {
       const db = await getDatabase();
@@ -283,6 +337,19 @@ export class ServiceManager {
       // Store UI config for services that might need it
       // For now, just log it
     });
+
+    // Listen for service control events
+    messageBus.subscribe('service_enable_requested', async (data) => {
+      const { serviceName } = data;
+      this.logger.system(`Received request to enable service: ${serviceName}`);
+      await this.enableService(serviceName);
+    });
+
+    messageBus.subscribe('service_disable_requested', async (data) => {
+      const { serviceName } = data;
+      this.logger.system(`Received request to disable service: ${serviceName}`);
+      await this.disableService(serviceName);
+    });
   }
 
   private updateLogConfiguration(logCategories: any) {
@@ -296,6 +363,22 @@ export class ServiceManager {
         this.logger.system(`Updated log configuration for ${name}`);
       }
     }
+  }
+
+  async enableService(serviceName: string) {
+    this.serviceEnabledState.set(serviceName, true);
+    await this.startService(serviceName);
+    messageBus.publish('service_enabled', { serviceName });
+  }
+
+  async disableService(serviceName: string) {
+    this.serviceEnabledState.set(serviceName, false);
+    await this.stopService(serviceName);
+    messageBus.publish('service_disabled', { serviceName });
+  }
+
+  getServiceEnabledStates(): Map<string, boolean> {
+    return new Map(this.serviceEnabledState);
   }
 }
 

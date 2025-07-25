@@ -1,12 +1,16 @@
 import { database } from '../lib/database.js';
 import { Logger } from '../lib/logger.js';
+import { Service, ServiceStatus } from '../lib/service-interface.js';
+import { MessageBus } from '../lib/message-bus.js';
 
-export class SignalAnalyzer {
+export class SignalAnalyzer implements Service {
+  readonly name = 'SignalAnalyzer';
   private logger: Logger;
   private isRunning: boolean = false;
   private analysisInterval?: number;
+  private lastHeartbeat: Date = new Date();
 
-  constructor() {
+  constructor(private messageBus: MessageBus) {
     this.logger = new Logger('signal-analyzer');
     this.logger.system('Initialized signal analyzer');
   }
@@ -39,6 +43,16 @@ export class SignalAnalyzer {
     }
     
     await this.logger.cleanup();
+  }
+
+  getStatus(): ServiceStatus {
+    return {
+      running: this.isRunning,
+      lastHeartbeat: this.lastHeartbeat.toISOString(),
+      metadata: {
+        analysisInterval: this.analysisInterval ? 'active' : 'inactive'
+      }
+    };
   }
 
   // Event-driven analysis triggered by new trades
@@ -319,9 +333,10 @@ export class SignalAnalyzer {
 
   private async updateHeartbeat() {
     try {
+      this.lastHeartbeat = new Date();
       await database.upsertServiceHeartbeat({
         service_name: 'signal-analyzer',
-        last_heartbeat: new Date().toISOString(),
+        last_heartbeat: this.lastHeartbeat.toISOString(),
         status: 'healthy',
         metadata: {
           is_running: this.isRunning

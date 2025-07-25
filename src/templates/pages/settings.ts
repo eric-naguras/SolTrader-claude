@@ -6,6 +6,7 @@ export const settingsPage = () => /*html*/ `<section>
         <ul role="tablist">
             <li><a href="#logging" role="tab" aria-selected="true" onclick="switchTab('logging')">Logging Configuration</a></li>
             <li><a href="#ui-refresh" role="tab" aria-selected="false" onclick="switchTab('ui-refresh')">UI Refresh Settings</a></li>
+            <li><a href="#services" role="tab" aria-selected="false" onclick="switchTab('services')">Service Management</a></li>
             <li><a href="#general" role="tab" aria-selected="false" onclick="switchTab('general')">General Settings</a></li>
         </ul>
     </nav>
@@ -34,6 +35,18 @@ export const settingsPage = () => /*html*/ `<section>
         <div id="toast-container"></div>
     </div>
     
+    <!-- Service Management Tab -->
+    <div id="services-tab" role="tabpanel" style="display: none;">
+        <h2>Service Management</h2>
+        <p>Start or stop individual services. Service states are persisted across server restarts.</p>
+        
+        <div id="service-controls" hx-get="/htmx/service-controls" hx-trigger="load">
+            <article aria-busy="true">Loading service status...</article>
+        </div>
+        
+        <div id="toast-container"></div>
+    </div>
+    
     <!-- General Tab (placeholder for future settings) -->
     <div id="general-tab" role="tabpanel" style="display: none;">
         <h2>General Settings</h2>
@@ -46,6 +59,7 @@ function switchTab(tab) {
     // Hide all tabs
     document.getElementById('logging-tab').style.display = 'none';
     document.getElementById('ui-refresh-tab').style.display = 'none';
+    document.getElementById('services-tab').style.display = 'none';
     document.getElementById('general-tab').style.display = 'none';
     
     // Show selected tab

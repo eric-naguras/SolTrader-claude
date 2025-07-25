@@ -102,6 +102,7 @@ export interface ServiceConfig {
   log_categories: Record<string, boolean>;
   other_settings: Record<string, any>;
   ui_refresh_config: Record<string, any>;
+  enabled: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -397,6 +398,18 @@ export class Database {
   async getServiceConfig(serviceName: string): Promise<ServiceConfig | null> {
     const result = await this.sql`SELECT * FROM service_configs WHERE service_name = ${serviceName}`;
     return result[0] || null;
+  }
+
+  async getAllServiceConfigs(): Promise<ServiceConfig[]> {
+    return await this.sql`SELECT * FROM service_configs ORDER BY service_name ASC`;
+  }
+
+  async updateServiceEnabled(serviceName: string, enabled: boolean): Promise<void> {
+    await this.sql`
+      UPDATE service_configs 
+      SET enabled = ${enabled}, updated_at = NOW() 
+      WHERE service_name = ${serviceName}
+    `;
   }
 
   async getSignalConfig(): Promise<SignalConfig | null> {

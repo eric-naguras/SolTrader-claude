@@ -450,7 +450,7 @@ export class WalletWatcher implements Service {
         const walletName = wallet.alias || wallet.address.slice(0, 8) + '...';
         const tokenDisplay = tradeData.tokenAddress.substring(0, 8) + '...';
         
-        this.logger.trade(`[WalletWatcher] Recorded ${tradeData.tradeType} trade: ${walletName} -> ${tokenDisplay} (${tradeData.solAmount} SOL)`);
+        this.logger.trade.generic(`[WalletWatcher] Recorded ${tradeData.tradeType} trade: ${walletName} -> ${tokenDisplay} (${tradeData.solAmount} SOL)`);
         
         // Publish new trade event to message bus
         this.messageBus.publish('new_trade', { trade });

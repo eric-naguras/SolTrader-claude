@@ -234,108 +234,12 @@ app.get('/htmx/logging-config', async (c: Context) => {
       };
     } else {
       logCategories = result.rows[0].log_categories;
+      console.log('Loaded log categories from database:', logCategories);
     }
     
-    // Return logging config form with current values
-    return c.html(`
-      <article>
-        <header>
-            <h3>Log Categories</h3>
-            <p>Toggle which events appear in the console logs</p>
-        </header>
-        
-        <form hx-put="/htmx/logging-config" hx-trigger="change" hx-target="#toast-container">
-            <div class="grid">
-                <!-- Connection Events -->
-                <div>
-                    <label>
-                        <input type="checkbox" name="connection" role="switch" ${logCategories.connection ? 'checked' : ''}>
-                        <strong>🔌 Connection Events</strong>
-                        <br>
-                        <small>WebSocket connections, disconnections, reconnects</small>
-                    </label>
-                </div>
-                
-                <!-- Wallet Activity -->
-                <div>
-                    <label>
-                        <input type="checkbox" name="wallet" role="switch" ${logCategories.wallet ? 'checked' : ''}>
-                        <strong>👛 Wallet Activity</strong>
-                        <br>
-                        <small>Wallet loading, tracking changes</small>
-                    </label>
-                </div>
-                
-                <!-- Trade Detection -->
-                <div>
-                    <label>
-                        <input type="checkbox" name="trade" role="switch" ${logCategories.trade ? 'checked' : ''}>
-                        <strong>📊 Trade Detection</strong>
-                        <br>
-                        <small>Entry/exit trades, amounts, tokens</small>
-                    </label>
-                </div>
-                
-                <!-- Multi-Whale Coordination -->
-                <div>
-                    <label>
-                        <input type="checkbox" name="multiWhale" role="switch" ${logCategories.multiWhale ? 'checked' : ''}>
-                        <strong>🎯 Multi-Whale Alerts</strong>
-                        <br>
-                        <small>Multiple whales in same token</small>
-                    </label>
-                </div>
-                
-                <!-- Transaction Processing -->
-                <div>
-                    <label>
-                        <input type="checkbox" name="transaction" role="switch" ${logCategories.transaction ? 'checked' : ''}>
-                        <strong>💾 Transaction Processing</strong>
-                        <br>
-                        <small>Raw transaction details, parsing</small>
-                    </label>
-                </div>
-                
-                <!-- Data Flow -->
-                <div>
-                    <label>
-                        <input type="checkbox" name="dataFlow" role="switch" ${logCategories.dataFlow ? 'checked' : ''}>
-                        <strong>📡 Data Flow</strong>
-                        <br>
-                        <small>WebSocket messages, queue status</small>
-                    </label>
-                </div>
-                
-                <!-- Health Monitoring -->
-                <div>
-                    <label>
-                        <input type="checkbox" name="health" role="switch" ${logCategories.health ? 'checked' : ''}>
-                        <strong>❤️ Health & Performance</strong>
-                        <br>
-                        <small>Heartbeats, latency, memory usage</small>
-                    </label>
-                </div>
-                
-                <!-- Debug Information -->
-                <div>
-                    <label>
-                        <input type="checkbox" name="debug" role="switch" ${logCategories.debug ? 'checked' : ''}>
-                        <strong>🐛 Debug Information</strong>
-                        <br>
-                        <small>Detailed errors, raw data, state changes</small>
-                    </label>
-                </div>
-            </div>
-            
-            <footer>
-                <div class="grid">
-                    <button type="button" class="secondary" disabled>Save as Preset (Coming Soon)</button>
-                    <button type="button" class="outline" onclick="location.reload()">Reset to Defaults</button>
-                </div>
-            </footer>
-        </form>
-      </article>
-    `);
+    // Use the new logging config template
+    const { loggingConfigTemplate } = await import('./src/templates/partials/logging-config.js');
+    return c.html(loggingConfigTemplate(logCategories));
   } catch (error) {
     console.error('Failed to get logging settings:', error);
     return c.html('<div class="error">Failed to load logging settings</div>', 500);
@@ -745,6 +649,104 @@ app.put('/htmx/settings/ui', async (c: Context) => {
   }
 });
 
+// HTMX endpoints for service control
+app.get('/htmx/service-controls', async (c: Context) => {
+  try {
+    const { getDatabase } = await import('./src/lib/database.js');
+    const { serviceControlsTemplate } = await import('./src/templates/partials/service-controls.js');
+    const db = getDatabase();
+    
+    // Get all service configs
+    const configs = await db.getAllServiceConfigs();
+    
+    // Define service metadata
+    const serviceMetadata = new Map([
+      ['WalletWatcher', { displayName: 'Wallet Watcher', description: 'Monitors whale wallet activity and detects coordinated trades' }],
+      ['PaperTrader', { displayName: 'Paper Trader', description: 'Simulates trades based on signals for testing strategies' }],
+      ['SignalAnalyzer', { displayName: 'Signal Analyzer', description: 'Analyzes trading patterns and generates insights' }],
+      ['SignalTrader', { displayName: 'Signal Trader', description: 'Executes real trades based on signals (requires live trading enabled)' }]
+    ]);
+    
+    // Build service control configs
+    const serviceControlConfigs = configs
+      .filter(config => serviceMetadata.has(config.service_name))
+      .map(config => ({
+        serviceName: config.service_name,
+        displayName: serviceMetadata.get(config.service_name)?.displayName || config.service_name,
+        enabled: config.enabled,
+        description: serviceMetadata.get(config.service_name)?.description
+      }));
+    
+    return c.html(serviceControlsTemplate(serviceControlConfigs));
+  } catch (error) {
+    console.error('Failed to get service controls:', error);
+    return c.html('<div class="error">Failed to load service controls</div>', 500);
+  }
+});
+
+app.put('/htmx/service-control/:serviceName/toggle', async (c: Context) => {
+  try {
+    const serviceName = c.req.param('serviceName');
+    const { getDatabase } = await import('./src/lib/database.js');
+    const db = getDatabase();
+    
+    // Get current state
+    const config = await db.getServiceConfig(serviceName);
+    if (!config) {
+      return c.html('<div class="error">Service not found</div>', 404);
+    }
+    
+    // Toggle the enabled state
+    const newEnabledState = !config.enabled;
+    await db.updateServiceEnabled(serviceName, newEnabledState);
+    
+    // Map database service names to internal service names
+    const serviceNameMapping: Record<string, string> = {
+      'WalletWatcher': 'wallet-watcher',
+      'PaperTrader': 'paper-trader',
+      'SignalAnalyzer': 'signal-analyzer',
+      'SignalTrader': 'signal-trader'
+    };
+    
+    const internalServiceName = serviceNameMapping[serviceName];
+    if (internalServiceName) {
+      // Publish event to enable/disable service
+      if (newEnabledState) {
+        messageBus.publish('service_enable_requested', { serviceName: internalServiceName });
+      } else {
+        messageBus.publish('service_disable_requested', { serviceName: internalServiceName });
+      }
+    }
+    
+    // Get updated service configs and return the whole service control panel
+    const configs = await db.getAllServiceConfigs();
+    const { serviceControlsTemplate } = await import('./src/templates/partials/service-controls.js');
+    
+    // Define service metadata
+    const serviceMetadata = new Map([
+      ['WalletWatcher', { displayName: 'Wallet Watcher', description: 'Monitors whale wallet activity and detects coordinated trades' }],
+      ['PaperTrader', { displayName: 'Paper Trader', description: 'Simulates trades based on signals for testing strategies' }],
+      ['SignalAnalyzer', { displayName: 'Signal Analyzer', description: 'Analyzes trading patterns and generates insights' }],
+      ['SignalTrader', { displayName: 'Signal Trader', description: 'Executes real trades based on signals (requires live trading enabled)' }]
+    ]);
+    
+    // Build service control configs
+    const serviceControlConfigs = configs
+      .filter(config => serviceMetadata.has(config.service_name))
+      .map(config => ({
+        serviceName: config.service_name,
+        displayName: serviceMetadata.get(config.service_name)?.displayName || config.service_name,
+        enabled: config.enabled,
+        description: serviceMetadata.get(config.service_name)?.description
+      }));
+    
+    // Return just the service controls template without the toast
+    return c.html(serviceControlsTemplate(serviceControlConfigs));
+  } catch (error) {
+    console.error('Failed to toggle service:', error);
+    return c.html('<div class="error">Failed to toggle service</div>', 500);
+  }
+});
 
 // HTMX endpoint for creating wallets
 app.post('/htmx/wallets', async (c: Context) => {
@@ -778,7 +780,10 @@ app.post('/htmx/wallets', async (c: Context) => {
       `, 409);
     }
     
-    const newWallet = await createTrackedWallet(walletData);
+    const newWallet = await createTrackedWallet({
+      ...walletData,
+      metadata: {}
+    });
     
     // Reload wallets in wallet watcher
     const walletWatcher = await serviceManager.getService('wallet-watcher');
@@ -999,57 +1004,32 @@ app.get('/htmx/partials/:partial', (c: Context) => {
   }
 });
 
-// Export the app for different runtimes
-export default app;
-
-// Runtime-specific startup
-async function startServer() {
+// Initialize services
+let initialized = false;
+async function initialize() {
+  if (initialized) return;
+  initialized = true;
+  
   // Setup static file serving
   await setupStaticFiles();
   
   // Start backend services
   console.log('🚀 Starting Sonar Platform...');
   await serviceManager.start();
-  
-  // Determine port
-  const port = Number(ENV.PORT) || 3005;
-  
-  console.log(`🌐 Frontend server starting on port ${port}`);
-  console.log(`📊 Dashboard: http://localhost:${port}`);
-  console.log('');
-  
-  // Runtime-specific server startup
-  if (typeof Bun !== 'undefined') {
-    // Bun runtime
-    Bun.serve({
-      fetch: app.fetch,
-      port,
-    });
-    console.log(`✅ Server running on Bun at http://localhost:${port}`);
-  } else if (typeof process !== 'undefined' && process.versions?.node) {
-    // Node.js runtime
-    const { serve } = await import('@hono/node-server');
-    serve({
-      fetch: app.fetch,
-      port,
-    });
-    console.log(`✅ Server running on Node.js at http://localhost:${port}`);
-  }
-  // For Cloudflare Workers, the default export is used directly
 }
 
-// Only start server if this file is the main module
-const isMainModule = () => {
-  // For runtime safety, always return true in server context
-  // This allows the server to start regardless of runtime detection issues
-  return true;
+// Start initialization
+initialize().catch(error => {
+  console.error('💥 Fatal error initializing services:', error);
+});
+
+// Determine port
+const port = Number(ENV.PORT) || 3005;
+console.log(`🌐 Frontend server starting on port ${port}`);
+console.log(`📊 Dashboard: http://localhost:${port}`);
+
+// Export for Bun runtime
+export default {
+  port,
+  fetch: app.fetch,
 };
-
-if (isMainModule()) {
-  startServer().catch(error => {
-    console.error('💥 Fatal error starting server:', error);
-    if (typeof process !== 'undefined' && process.exit) {
-      process.exit(1);
-    }
-  });
-}
