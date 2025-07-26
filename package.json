@@ -14,14 +14,16 @@
     "dev:worker": "wrangler dev",
     "test": "cp .env.test .env && bun test",
     "test:watch": "cp .env.test .env && bun test --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "fix-tokens": "bun run src/scripts/fix-token-metadata.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.8.0",
+    "@metaplex-foundation/js": "^0.20.1",
     "@neondatabase/serverless": "^1.0.1",
     "@solana/web3.js": "^1.87.0",
-    "hono": "^4.0.0",
     "helius-sdk": "^1.2.0",
+    "hono": "^4.0.0",
     "ws": "^8.16.0"
   },
   "devDependencies": {

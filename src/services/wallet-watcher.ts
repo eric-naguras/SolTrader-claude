@@ -4,11 +4,14 @@ import { Logger } from '../lib/logger.js';
 import { ENV } from '../lib/env.js';
 import { Service, ServiceStatus } from '../lib/service-interface.js';
 import { MessageBus } from '../lib/message-bus.js';
+import { solscanAPI } from '../lib/solscan-api.js';
 import WebSocket from 'ws';
 import { getMultipleWalletBalances } from '../lib/solscan.js';
 
 export class WalletWatcher implements Service {
   readonly name = 'WalletWatcher';
+  
+  private static readonly SOL_MINT = 'So11111111111111111111111111111111111112';
   
   private helius: Helius;
   private logger: Logger;
@@ -306,15 +309,11 @@ export class WalletWatcher implements Service {
           if (message.method === 'logsNotification' && message.params) {
             const { signature } = message.params.result.value;
             
-            // Check if logs indicate a swap
-            const isSwap = this.isPotentialSwap(message.params.result.value.logs);
-            
-            if (isSwap) {
-              this.logger.transaction(`Potential swap detected: ${signature}`);
-              setTimeout(async () => {
-                await this.processTransaction(signature);
-              }, 2000);
-            }
+            // Process ALL transactions, not just swaps
+            this.logger.transaction(`Transaction detected: ${signature}`);
+            setTimeout(async () => {
+              await this.processTransaction(signature);
+            }, 2000);
           }
         } catch (error) {
           this.logger.error('Error processing message:', error);
@@ -342,18 +341,6 @@ export class WalletWatcher implements Service {
     }
   }
 
-  private isPotentialSwap(logs: string[]): boolean {
-    return logs.some((log: string) => {
-      const lowerLog = log.toLowerCase();
-      return lowerLog.includes('swap') || 
-             lowerLog.includes('trade') ||
-             lowerLog.includes('exchange') ||
-             lowerLog.includes('jupiter') ||
-             lowerLog.includes('raydium') ||
-             lowerLog.includes('orca') ||
-             lowerLog.includes('meteora');
-    });
-  }
 
   private async processTransaction(signature: string) {
     try {
@@ -396,26 +383,29 @@ export class WalletWatcher implements Service {
 
   private async processTrade(tx: any, wallet: any, signature: string) {
     try {
-      this.logger.debug(`Processing trade for wallet ${wallet.address.substring(0, 8)}...`);
+      this.logger.debug(`Processing transaction for wallet ${wallet.address.substring(0, 8)}...`);
       
       // Extract token and SOL balance changes
       const tokenChanges = this.extractTokenChanges(tx);
       const solChange = this.extractSolChange(tx, wallet.address);
 
-      // Find the relevant token trade
-      const tradeData = this.identifyTrade(tokenChanges, solChange);
-      if (!tradeData) {
+      // Determine transaction type and details
+      const transactionData = this.analyzeTransaction(tx, tokenChanges, solChange, wallet.address);
+      if (!transactionData) {
+        this.logger.debug(`No relevant activity found for wallet ${wallet.address.substring(0, 8)}`);
         return;
       }
 
-      // Ensure token exists
-      await this.ensureTokenExists(tradeData.tokenAddress);
+      // Ensure token exists (if applicable)
+      if (transactionData.tokenAddress && transactionData.tokenAddress !== WalletWatcher.SOL_MINT) {
+        await this.ensureTokenExists(transactionData.tokenAddress);
+      }
 
-      // Record the trade
-      await this.recordTrade(wallet, tradeData, signature);
+      // Record the transaction
+      await this.recordTrade(wallet, transactionData, signature);
       
     } catch (error) {
-      this.logger.error('Error processing trade:', error);
+      this.logger.error('Error processing transaction:', error);
     }
   }
 
@@ -458,25 +448,131 @@ export class WalletWatcher implements Service {
     return postBalance - preBalance - fee;
   }
 
-  private identifyTrade(tokenChanges: Array<{mint: string, change: number, decimals: number}>, solChange: number) {
-    const SOL_MINT = 'So11111111111111111111111111111111111112';
+  private analyzeTransaction(tx: any, tokenChanges: Array<{mint: string, change: number, decimals: number}>, solChange: number, walletAddress: string) {
+    // Debug logging
+    this.logger.debug(`[WalletWatcher] Analyzing transaction for ${walletAddress.substring(0, 8)}...`);
+    this.logger.debug(`[WalletWatcher] SOL change: ${solChange / 1e9} SOL`);
+    this.logger.debug(`[WalletWatcher] Token changes: ${tokenChanges.map(c => `${c.mint.substring(0, 8)}... (${c.change})`).join(', ')}`);
     
-    // Find the token with the largest change
+    // Check if this is a swap transaction
+    const swapData = this.identifyTrade(tokenChanges, solChange);
+    if (swapData && swapData.tokenAddress !== WalletWatcher.SOL_MINT) {
+      this.logger.debug(`[WalletWatcher] Identified as swap: ${swapData.tradeType} ${swapData.tokenAddress.substring(0, 8)}...`);
+      return {
+        ...swapData,
+        transactionType: 'swap',
+        counterpartyAddress: null
+      };
+    }
+    
+    if (swapData && swapData.tokenAddress === WalletWatcher.SOL_MINT) {
+      this.logger.debug(`[WalletWatcher] Swap detected but with SOL address - treating as SOL transfer instead`);
+    }
+    
+    this.logger.debug(`[WalletWatcher] Not identified as swap, checking other transaction types...`);
+
+    // Check for SOL transfers
+    if (Math.abs(solChange) > 0.001 * 1e9) { // At least 0.001 SOL
+      const solAmount = Math.abs(solChange) / 1e9;
+      const tradeType = solChange > 0 ? 'TRANSFER_IN' : 'TRANSFER_OUT';
+      
+      // Try to find the counterparty from instruction data
+      const counterparty = this.findCounterpartyAddress(tx, walletAddress);
+      
+      return {
+        tokenAddress: WalletWatcher.SOL_MINT,
+        tradeType,
+        solAmount,
+        transactionType: 'sol_transfer',
+        counterpartyAddress: counterparty
+      };
+    }
+
+    // Check for token transfers (no SOL change)
+    for (const change of tokenChanges) {
+      if (change.mint === WalletWatcher.SOL_MINT) continue;
+      
+      if (Math.abs(change.change) > 0) {
+        const tradeType = change.change > 0 ? 'TRANSFER_IN' : 'TRANSFER_OUT';
+        const counterparty = this.findCounterpartyAddress(tx, walletAddress);
+        
+        return {
+          tokenAddress: change.mint,
+          tradeType,
+          solAmount: 0,
+          transactionType: 'token_transfer',
+          counterpartyAddress: counterparty
+        };
+      }
+    }
+
+    // Other transaction types
+    if (tokenChanges.length > 0 || Math.abs(solChange) > 0) {
+      return {
+        tokenAddress: WalletWatcher.SOL_MINT,
+        tradeType: 'OTHER' as const,
+        solAmount: Math.abs(solChange) / 1e9,
+        transactionType: 'other',
+        counterpartyAddress: null
+      };
+    }
+
+    return null;
+  }
+
+  private findCounterpartyAddress(tx: any, walletAddress: string): string | null {
+    try {
+      // Look for simple transfers in instruction data
+      const accountKeys = tx.transaction.message.accountKeys.map((key: any) => key.pubkey.toString());
+      
+      // Find addresses that aren't the wallet and aren't system programs
+      const systemPrograms = [
+        '11111111111111111111111111111111', // System Program
+        'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', // Token Program
+        'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', // Associated Token Program
+      ];
+      
+      for (const address of accountKeys) {
+        if (address !== walletAddress && !systemPrograms.includes(address)) {
+          // This could be the counterparty - we'll use the first non-system address
+          return address;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private identifyTrade(tokenChanges: Array<{mint: string, change: number, decimals: number}>, solChange: number) {
+    this.logger.debug(`[WalletWatcher] identifyTrade called with ${tokenChanges.length} token changes, SOL change: ${solChange / 1e9}`);
+    
+    // Find the meme coin (non-SOL token) that changed
     let targetToken: string | null = null;
     let tradeType: 'BUY' | 'SELL' | null = null;
     let solAmount = Math.abs(solChange) / 1e9; // Convert to SOL
 
-    // Look for SOL-token swaps
+    // Look for non-SOL token changes - we always want the meme coin, never SOL
     for (const change of tokenChanges) {
-      if (change.mint === SOL_MINT) continue;
+      this.logger.debug(`[WalletWatcher] Checking token change: ${change.mint.substring(0, 8)}... change: ${change.change}`);
+      
+      if (change.mint === WalletWatcher.SOL_MINT) {
+        this.logger.debug(`[WalletWatcher] Skipping SOL token change`);
+        continue; // Skip SOL
+      }
       
       // Check if this is a swap with SOL
       if (Math.abs(solChange) > 0.001 * 1e9) { // At least 0.001 SOL
         if (solChange < 0 && change.change > 0) {
+          // SOL decreased, token increased = BUY
+          this.logger.debug(`[WalletWatcher] Detected BUY: SOL decreased (${solChange / 1e9}), token ${change.mint.substring(0, 8)}... increased (${change.change})`);
           targetToken = change.mint;
           tradeType = 'BUY';
           break;
         } else if (solChange > 0 && change.change < 0) {
+          // SOL increased, token decreased = SELL
+          this.logger.debug(`[WalletWatcher] Detected SELL: SOL increased (${solChange / 1e9}), token ${change.mint.substring(0, 8)}... decreased (${change.change})`);
           targetToken = change.mint;
           tradeType = 'SELL';
           break;
@@ -484,38 +580,87 @@ export class WalletWatcher implements Service {
       }
     }
 
-    if (!targetToken && tokenChanges.length > 0) {
-      // Fallback: use the first token change
-      const change = tokenChanges[0];
-      targetToken = change.mint;
-      tradeType = change.change > 0 ? 'BUY' : 'SELL';
+    // Fallback: find any non-SOL token change
+    if (!targetToken) {
+      for (const change of tokenChanges) {
+        if (change.mint === WalletWatcher.SOL_MINT) continue; // Never use SOL as target token
+        
+        targetToken = change.mint;
+        tradeType = change.change > 0 ? 'BUY' : 'SELL';
+        break;
+      }
     }
 
-    return targetToken && tradeType ? { tokenAddress: targetToken, tradeType, solAmount } : null;
+    // Only return if we found a non-SOL token
+    if (targetToken && tradeType && targetToken !== WalletWatcher.SOL_MINT) {
+      this.logger.debug(`[WalletWatcher] identifyTrade returning: ${tradeType} ${targetToken.substring(0, 8)}... (${solAmount} SOL)`);
+      return { tokenAddress: targetToken, tradeType, solAmount };
+    }
+    
+    this.logger.debug(`[WalletWatcher] identifyTrade returning null - no valid non-SOL token found`);
+    return null;
   }
 
   private async ensureTokenExists(address: string) {
     try {
-      const existingToken = await database.getToken(address);
-      
-      if (existingToken?.symbol && existingToken?.name) {
-        // Token already exists, just update last_seen
-        await database.upsertToken({
-          address,
-          symbol: existingToken.symbol,
-          name: existingToken.name,
-          metadata: existingToken.metadata
-        });
+      // Skip SOL - we never need to store it as a token
+      if (address === WalletWatcher.SOL_MINT) {
         return;
       }
 
-      // Fetch token metadata (placeholder - could be enhanced)
-      const tokenData = {
-        address,
-        symbol: address.substring(0, 8).toUpperCase(),
-        name: `Token ${address.substring(0, 8)}`,
-        metadata: {}
-      };
+      const existingToken = await database.getToken(address);
+      
+      // Check if token exists with proper data (not placeholder)
+      if (existingToken?.symbol && existingToken?.name) {
+        const isPlaceholder = existingToken.symbol === address.substring(0, 8).toUpperCase() ||
+                            existingToken.name === `Token ${address.substring(0, 8)}` ||
+                            existingToken.symbol === 'UNKNOWN';
+        
+        if (!isPlaceholder) {
+          // Token already exists with proper metadata, just update last_seen
+          await database.upsertToken({
+            address,
+            symbol: existingToken.symbol,
+            name: existingToken.name,
+            metadata: existingToken.metadata
+          });
+          this.logger.debug(`Token already in database: ${existingToken.symbol} (${existingToken.name})`);
+          return;
+        }
+        
+        // Token has placeholder data, try to fetch real metadata
+        this.logger.debug(`Token has placeholder data, fetching real metadata for ${address.substring(0, 8)}...`);
+      }
+
+      // Token not in database or has placeholder data, fetch metadata
+      this.logger.debug(`Fetching token metadata for ${address.substring(0, 8)}...`);
+      const metadata = await solscanAPI.getTokenMetadata(address);
+      
+      let tokenData;
+      if (metadata && metadata.symbol !== 'UNKNOWN') {
+        // Successfully fetched metadata
+        tokenData = {
+          address,
+          symbol: metadata.symbol,
+          name: metadata.name,
+          metadata: {
+            decimals: metadata.decimals,
+            icon: metadata.icon,
+            website: metadata.website,
+            twitter: metadata.twitter
+          }
+        };
+        this.logger.wallet(`Token metadata fetched: ${metadata.symbol} - ${metadata.name}`);
+      } else {
+        // Fallback to placeholder data
+        tokenData = {
+          address,
+          symbol: address.substring(0, 8).toUpperCase(),
+          name: `Token ${address.substring(0, 8)}`,
+          metadata: {}
+        };
+        this.logger.debug(`Using placeholder data for token ${address.substring(0, 8)}...`);
+      }
 
       await database.upsertToken(tokenData);
       
@@ -526,6 +671,12 @@ export class WalletWatcher implements Service {
 
   private async recordTrade(wallet: any, tradeData: any, signature: string) {
     try {
+      // Get token info from database (should be available after ensureTokenExists)
+      // For SOL transfers, we'll use SOL as the "token"
+      const tokenInfo = tradeData.tokenAddress !== WalletWatcher.SOL_MINT 
+        ? await database.getToken(tradeData.tokenAddress)
+        : { symbol: 'SOL', name: 'Solana' };
+      
       const trade = await database.insertWhaleTrade({
         wallet_address: wallet.address,
         coin_address: tradeData.tokenAddress,
@@ -533,22 +684,50 @@ export class WalletWatcher implements Service {
         sol_amount: tradeData.solAmount,
         token_amount: null, // Could be calculated from transaction
         transaction_hash: signature,
-        trade_timestamp: new Date().toISOString()
+        trade_timestamp: new Date().toISOString(),
+        transaction_type: tradeData.transactionType,
+        counterparty_address: tradeData.counterpartyAddress
       });
 
       if (trade) {
         const walletName = wallet.alias || wallet.address.slice(0, 8) + '...';
-        const tokenDisplay = tradeData.tokenAddress.substring(0, 8) + '...';
+        const tokenDisplay = tokenInfo ? `${tokenInfo.symbol} (${tokenInfo.name})` : tradeData.tokenAddress.substring(0, 8) + '...';
         
-        this.logger.trade.generic(`[WalletWatcher] Recorded ${tradeData.tradeType} trade: ${walletName} -> ${tokenDisplay} (${tradeData.solAmount} SOL)`);
+        // Log different transaction types appropriately
+        switch (tradeData.transactionType) {
+          case 'swap':
+            this.logger.trade.generic(`[WalletWatcher] Recorded ${tradeData.tradeType} swap: ${walletName} -> ${tokenDisplay} (${tradeData.solAmount} SOL)`);
+            break;
+          case 'sol_transfer':
+            const direction = tradeData.tradeType === 'TRANSFER_IN' ? 'received' : 'sent';
+            const counterparty = tradeData.counterpartyAddress ? tradeData.counterpartyAddress.substring(0, 8) + '...' : 'unknown';
+            this.logger.trade.generic(`[WalletWatcher] Recorded SOL transfer: ${walletName} ${direction} ${tradeData.solAmount} SOL ${tradeData.tradeType === 'TRANSFER_IN' ? 'from' : 'to'} ${counterparty}`);
+            break;
+          case 'token_transfer':
+            const tokenDirection = tradeData.tradeType === 'TRANSFER_IN' ? 'received' : 'sent';
+            const tokenCounterparty = tradeData.counterpartyAddress ? tradeData.counterpartyAddress.substring(0, 8) + '...' : 'unknown';
+            this.logger.trade.generic(`[WalletWatcher] Recorded token transfer: ${walletName} ${tokenDirection} ${tokenDisplay} ${tradeData.tradeType === 'TRANSFER_IN' ? 'from' : 'to'} ${tokenCounterparty}`);
+            break;
+          default:
+            this.logger.trade.generic(`[WalletWatcher] Recorded ${tradeData.transactionType}: ${walletName} -> ${tokenDisplay} (${tradeData.solAmount} SOL)`);
+        }
         
-        // Publish new trade event to message bus
-        this.messageBus.publish('new_trade', { trade });
+        // Publish new trade event to message bus with token info
+        this.messageBus.publish('new_trade', { 
+          trade,
+          tokenInfo: tokenInfo ? {
+            symbol: tokenInfo.symbol,
+            name: tokenInfo.name,
+            address: tokenInfo.address,
+            metadata: tokenInfo.metadata
+          } : null
+        });
         
+        // Only track multi-whale positions for swaps (BUY/SELL)
         if (tradeData.tradeType === 'BUY') {
           this.logger.trade.enter(walletName, tokenDisplay, tradeData.solAmount);
           
-          // Track multi-whale positions
+          // Track multi-whale positions for signal generation
           if (!this.multiWhalePositions.has(tradeData.tokenAddress)) {
             this.multiWhalePositions.set(tradeData.tokenAddress, new Set());
           }
@@ -563,7 +742,7 @@ export class WalletWatcher implements Service {
             });
             this.logger.multiWhale(whalesInToken.size, tokenDisplay, whaleNames);
           }
-        } else {
+        } else if (tradeData.tradeType === 'SELL') {
           this.logger.trade.exit(walletName, tokenDisplay, tradeData.solAmount);
           
           // Remove from multi-whale tracking
@@ -572,6 +751,7 @@ export class WalletWatcher implements Service {
             this.multiWhalePositions.delete(tradeData.tokenAddress);
           }
         }
+        // Note: Transfers don't affect multi-whale signal generation
       }
       
     } catch (error) {
