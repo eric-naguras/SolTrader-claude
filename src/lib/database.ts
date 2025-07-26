@@ -36,13 +36,15 @@ export interface WhaleTrade {
   id: number;
   wallet_address: string;
   coin_address: string;
-  trade_type: 'BUY' | 'SELL';
+  trade_type: 'BUY' | 'SELL' | 'TRANSFER_OUT' | 'TRANSFER_IN' | 'OTHER';
   sol_amount: number | null;
   token_amount: number | null;
   transaction_hash: string;
   trade_timestamp: string;
   created_at: string | null;
   updated_at: string | null;
+  transaction_type?: string | null;
+  counterparty_address?: string | null;
 }
 
 export interface TradeSignal {
@@ -300,8 +302,8 @@ export class Database {
   // Whale Trades
   async insertWhaleTrade(trade: Omit<WhaleTrade, 'id' | 'created_at' | 'updated_at'>): Promise<WhaleTrade> {
     const result = await this.sql`
-      INSERT INTO whale_trades (wallet_address, coin_address, trade_type, sol_amount, token_amount, transaction_hash, trade_timestamp)
-      VALUES (${trade.wallet_address}, ${trade.coin_address}, ${trade.trade_type}, ${trade.sol_amount}, ${trade.token_amount}, ${trade.transaction_hash}, ${trade.trade_timestamp})
+      INSERT INTO whale_trades (wallet_address, coin_address, trade_type, sol_amount, token_amount, transaction_hash, trade_timestamp, transaction_type, counterparty_address)
+      VALUES (${trade.wallet_address}, ${trade.coin_address}, ${trade.trade_type}, ${trade.sol_amount}, ${trade.token_amount}, ${trade.transaction_hash}, ${trade.trade_timestamp}, ${trade.transaction_type || null}, ${trade.counterparty_address || null})
       ON CONFLICT (transaction_hash) DO NOTHING
       RETURNING *
     `;
