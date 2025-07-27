@@ -7,6 +7,7 @@ import { MessageBus } from '../lib/message-bus.js';
 import { solscanAPI } from '../lib/solscan-api.js';
 import WebSocket from 'ws';
 import { getMultipleWalletBalances } from '../lib/solscan.js';
+import { setCurrentHttpService } from '../lib/http-monitor.js';
 
 export class WalletWatcher implements Service {
   readonly name = 'WalletWatcher';
@@ -28,8 +29,9 @@ export class WalletWatcher implements Service {
   private isRunning: boolean = false;
   private unsubscribers: (() => void)[] = [];
   private balanceUpdateInterval?: number;
+  private solTokenInfo: any = null; // Cache for SOL token info
   private uiRefreshConfig: any = {
-    balance_interval_minutes: 5,
+    balance_interval_minutes: 15,  // Increased from 5 to 15 minutes to reduce rate limiting
     auto_refresh_enabled: true,
     pause_on_activity: true,
     show_refresh_indicators: true
@@ -51,6 +53,9 @@ export class WalletWatcher implements Service {
     try {
       this.logger.system('[WalletWatcher] Starting...');
       this.isShuttingDown = false;
+      
+      // Load SOL token info once at startup
+      await this.loadSolTokenInfo();
       
       // Subscribe to message bus events
       this.setupMessageBusListeners();
@@ -128,6 +133,29 @@ export class WalletWatcher implements Service {
     };
   }
 
+  private async loadSolTokenInfo(): Promise<void> {
+    try {
+      // First ensure SOL exists in the database
+      await this.ensureTokenExists(WalletWatcher.SOL_MINT);
+      
+      // Then load and cache the SOL token info
+      this.solTokenInfo = await database.getToken(WalletWatcher.SOL_MINT);
+      
+      if (this.solTokenInfo) {
+        this.logger.system(`[WalletWatcher] Loaded SOL token info: ${this.solTokenInfo.symbol} (${this.solTokenInfo.name}) - One-time database lookup completed`);
+      } else {
+        // This shouldn't happen if ensureTokenExists worked properly
+        this.logger.error('[WalletWatcher] Failed to load SOL token info from database');
+        // Create a fallback
+        this.solTokenInfo = { symbol: 'SOL', name: 'Wrapped SOL', address: WalletWatcher.SOL_MINT };
+      }
+    } catch (error) {
+      this.logger.error('[WalletWatcher] Error loading SOL token info:', error);
+      // Create a fallback
+      this.solTokenInfo = { symbol: 'SOL', name: 'Wrapped SOL', address: WalletWatcher.SOL_MINT };
+    }
+  }
+
   private setupMessageBusListeners(): void {
     // Listen for wallet updates from the frontend
     const walletUpdatedHandler = async (data: any) => {
@@ -191,6 +219,9 @@ export class WalletWatcher implements Service {
     try {
       this.logger.system(`[WalletWatcher] Updating balances for ${this.trackedWallets.size} wallets`);
       
+      // Set service context for HTTP monitoring
+      setCurrentHttpService('WalletWatcher-BalanceUpdate');
+      
       // Get all wallet addresses
       const addresses = Array.from(this.trackedWallets.keys());
       
@@ -219,7 +250,11 @@ export class WalletWatcher implements Service {
         updatedCount: Object.keys(balances).length
       });
     } catch (error) {
-      this.logger.error('[WalletWatcher] Error updating wallet balances:', error);
+      if (error.message && error.message.includes('429')) {
+        this.logger.error('[WalletWatcher Balance Service] 🚫 Rate limited when updating wallet balances. Current interval: 5min. Consider increasing balance_interval_minutes in UI settings to 10+ minutes.');
+      } else {
+        this.logger.error('[WalletWatcher Balance Service] ❌ Error updating wallet balances:', error);
+      }
     }
   }
 
@@ -344,6 +379,9 @@ export class WalletWatcher implements Service {
 
   private async processTransaction(signature: string) {
     try {
+      // Set service context for HTTP monitoring
+      setCurrentHttpService('WalletWatcher-Helius');
+      
       const tx = await this.helius.connection.getParsedTransaction(
         signature,
         {
@@ -397,7 +435,9 @@ export class WalletWatcher implements Service {
       }
 
       // Ensure token exists (if applicable)
-      if (transactionData.tokenAddress && transactionData.tokenAddress !== WalletWatcher.SOL_MINT) {
+      if (transactionData.tokenAddress) {
+        // Set service context for token metadata calls
+        setCurrentHttpService('WalletWatcher-TokenMetadata');
         await this.ensureTokenExists(transactionData.tokenAddress);
       }
 
@@ -603,8 +643,19 @@ export class WalletWatcher implements Service {
 
   private async ensureTokenExists(address: string) {
     try {
-      // Skip SOL - we never need to store it as a token
+      // Handle SOL specifically
       if (address === WalletWatcher.SOL_MINT) {
+        // Ensure SOL exists in the tokens table
+        const existingSOL = await database.getToken(address);
+        if (!existingSOL) {
+          await database.upsertToken({
+            address,
+            symbol: 'SOL',
+            name: 'Wrapped SOL',
+            metadata: { decimals: 9, isNative: true }
+          });
+          this.logger.debug('Added SOL to tokens table');
+        }
         return;
       }
 
@@ -671,11 +722,10 @@ export class WalletWatcher implements Service {
 
   private async recordTrade(wallet: any, tradeData: any, signature: string) {
     try {
-      // Get token info from database (should be available after ensureTokenExists)
-      // For SOL transfers, we'll use SOL as the "token"
-      const tokenInfo = tradeData.tokenAddress !== WalletWatcher.SOL_MINT 
-        ? await database.getToken(tradeData.tokenAddress)
-        : { symbol: 'SOL', name: 'Solana' };
+      // Get token info - use cached SOL info or fetch from database for other tokens
+      const tokenInfo = tradeData.tokenAddress === WalletWatcher.SOL_MINT 
+        ? this.solTokenInfo
+        : await database.getToken(tradeData.tokenAddress);
       
       const trade = await database.insertWhaleTrade({
         wallet_address: wallet.address,

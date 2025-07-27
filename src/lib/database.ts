@@ -2,23 +2,66 @@ import { neon } from '@neondatabase/serverless';
 import { ENV } from './env.js';
 
 // Database type definitions based on the migration schema
-export interface TrackedWallet {
+export interface Trader {
   id: string;
-  address: string;
+  name: string;
   alias: string | null;
-  is_active: boolean | null;
+  total_balance: number | null;
   tags: string[] | null;
-  metadata: Record<string, any> | null;
-  created_at: string | null;
-  updated_at: string | null;
   ui_color: string | null;
   twitter_handle: string | null;
   telegram_channel: string | null;
   streaming_channel: string | null;
   image_data: string | null;
   notes: string | null;
+  is_active: boolean | null;
+  metadata: Record<string, any> | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface TrackedWallet {
+  id: string;
+  address: string;
+  trader_id: string;
+  is_active: boolean | null;
+  metadata: Record<string, any> | null;
+  created_at: string | null;
+  updated_at: string | null;
   sol_balance: number | null;
   last_balance_check: string | null;
+}
+
+export interface WalletOwnershipConflict {
+  id: string;
+  wallet_address: string;
+  existing_trader_id: string;
+  conflicting_trader_id: string;
+  conflict_reason: string;
+  transaction_hash: string | null;
+  transfer_direction: 'FROM_EXISTING' | 'TO_EXISTING' | null;
+  transfer_amount: number | null;
+  detected_at: string;
+  resolved: boolean;
+  resolution_notes: string | null;
+  resolved_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface WalletWithTrader extends TrackedWallet {
+  trader_name: string;
+  trader_alias: string | null;
+  trader_color: string | null;
+  twitter_handle: string | null;
+  telegram_channel: string | null;
+  streaming_channel: string | null;
+  image_data: string | null;
+  trader_notes: string | null;
+  trader_tags: string[] | null;
+  trader_is_active: boolean | null;
+  trader_total_balance: number | null;
+  has_conflicts: boolean;
 }
 
 export interface Token {
@@ -117,6 +160,7 @@ export interface RecentWhaleTrade extends WhaleTrade {
   telegram_channel: string | null;
   streaming_channel: string | null;
   image_data: string | null;
+  wallet_is_active: boolean | null;
   token_symbol: string | null;
   token_name: string | null;
 }
@@ -451,6 +495,173 @@ export class Database {
     const rows = await this.sql.unsafe(queryString, params);
     return { rows };
   }
+
+  // Trader methods
+  async getTrader(id: string): Promise<Trader | null> {
+    const result = await this.sql`SELECT * FROM traders WHERE id = ${id}`;
+    return result[0] || null;
+  }
+
+  async getTraderByWalletAddress(walletAddress: string): Promise<Trader | null> {
+    const result = await this.sql`
+      SELECT t.* FROM traders t
+      JOIN tracked_wallets tw ON t.id = tw.trader_id
+      WHERE tw.address = ${walletAddress}
+    `;
+    return result[0] || null;
+  }
+
+  async createTrader(trader: Omit<Trader, 'id' | 'created_at' | 'updated_at'>): Promise<Trader> {
+    const result = await this.sql`
+      INSERT INTO traders (name, alias, tags, ui_color, twitter_handle, telegram_channel, streaming_channel, image_data, notes, is_active, metadata)
+      VALUES (${trader.name}, ${trader.alias}, ${trader.tags}, ${trader.ui_color}, ${trader.twitter_handle}, ${trader.telegram_channel}, ${trader.streaming_channel}, ${trader.image_data}, ${trader.notes}, ${trader.is_active ?? true}, ${JSON.stringify(trader.metadata || {})})
+      RETURNING *
+    `;
+    return result[0];
+  }
+
+  async updateTraderBalance(traderId: string): Promise<void> {
+    await this.sql`SELECT update_trader_balance(${traderId})`;
+  }
+
+  async getWalletsByTrader(traderId: string): Promise<TrackedWallet[]> {
+    return await this.sql`
+      SELECT * FROM tracked_wallets 
+      WHERE trader_id = ${traderId} 
+      ORDER BY created_at DESC
+    `;
+  }
+
+  // Wallet ownership conflict methods
+  async logOwnershipConflict(conflict: Omit<WalletOwnershipConflict, 'id' | 'created_at' | 'updated_at'>): Promise<WalletOwnershipConflict> {
+    const result = await this.sql`
+      INSERT INTO wallet_ownership_conflicts (
+        wallet_address, existing_trader_id, conflicting_trader_id, 
+        conflict_reason, transaction_hash, transfer_direction, 
+        transfer_amount, detected_at
+      )
+      VALUES (
+        ${conflict.wallet_address}, ${conflict.existing_trader_id}, 
+        ${conflict.conflicting_trader_id}, ${conflict.conflict_reason}, 
+        ${conflict.transaction_hash}, ${conflict.transfer_direction}, 
+        ${conflict.transfer_amount}, ${conflict.detected_at || new Date().toISOString()}
+      )
+      RETURNING *
+    `;
+    return result[0];
+  }
+
+  async getUnresolvedConflicts(): Promise<WalletOwnershipConflict[]> {
+    return await this.sql`
+      SELECT * FROM wallet_ownership_conflicts 
+      WHERE resolved = false 
+      ORDER BY detected_at DESC
+    `;
+  }
+
+  async resolveConflict(conflictId: string, resolutionNotes: string): Promise<void> {
+    await this.sql`
+      UPDATE wallet_ownership_conflicts 
+      SET resolved = true, 
+          resolution_notes = ${resolutionNotes}, 
+          resolved_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ${conflictId}
+    `;
+  }
+
+  // Updated wallet creation to include trader_id
+  async createTrackedWalletWithTrader(walletData: Omit<TrackedWallet, 'id' | 'created_at' | 'updated_at'>): Promise<TrackedWallet> {
+    const result = await this.sql`
+      INSERT INTO tracked_wallets (address, trader_id, is_active, metadata)
+      VALUES (${walletData.address}, ${walletData.trader_id}, ${walletData.is_active ?? true}, ${JSON.stringify(walletData.metadata || {})})
+      RETURNING *
+    `;
+    return result[0];
+  }
+
+  // Get wallets with trader information
+  async getWalletsWithTraderInfo(
+    sortBy?: string, 
+    sortOrder: 'asc' | 'desc' = 'desc', 
+    tagFilter?: string[]
+  ): Promise<WalletWithTrader[]> {
+    try {
+      console.log('getWalletsWithTraderInfo called with:', { sortBy, sortOrder, tagFilter });
+      
+      // Map sort columns to view columns
+      const columnMapping: Record<string, string> = {
+        'alias': 'trader_alias',
+        'tags': 'trader_tags',
+        'created_at': 'created_at',
+        'is_active': 'is_active',
+        'sol_balance': 'sol_balance'
+      };
+      
+      const validColumns = Object.keys(columnMapping);
+      const safeSort = (sortBy && validColumns.includes(sortBy)) ? columnMapping[sortBy] : 'created_at';
+      const safeOrder = sortOrder === 'asc' ? 'ASC' : 'DESC';
+      
+      let result;
+      if (!tagFilter || tagFilter.length === 0) {
+        // No tag filter
+        if (safeSort === 'trader_alias') {
+          result = safeOrder === 'ASC' 
+            ? await this.sql`SELECT * FROM wallets_with_traders ORDER BY trader_alias ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders ORDER BY trader_alias DESC`;
+        } else if (safeSort === 'is_active') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM wallets_with_traders ORDER BY is_active ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders ORDER BY is_active DESC`;
+        } else if (safeSort === 'sol_balance') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM wallets_with_traders ORDER BY sol_balance ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders ORDER BY sol_balance DESC`;
+        } else if (safeSort === 'trader_tags') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM wallets_with_traders ORDER BY trader_tags ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders ORDER BY trader_tags DESC`;
+        } else {
+          // Default to created_at
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM wallets_with_traders ORDER BY created_at ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders ORDER BY created_at DESC`;
+        }
+      } else {
+        // With tag filter - filter on trader_tags
+        if (safeSort === 'trader_alias') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY trader_alias ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY trader_alias DESC`;
+        } else if (safeSort === 'is_active') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY is_active ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY is_active DESC`;
+        } else if (safeSort === 'sol_balance') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY sol_balance ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY sol_balance DESC`;
+        } else if (safeSort === 'trader_tags') {
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY trader_tags ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY trader_tags DESC`;
+        } else {
+          // Default to created_at
+          result = safeOrder === 'ASC'
+            ? await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY created_at ASC`
+            : await this.sql`SELECT * FROM wallets_with_traders WHERE trader_tags && ${tagFilter} ORDER BY created_at DESC`;
+        }
+      }
+      
+      console.log('Query result:', result?.length, 'wallets found');
+      
+      // Ensure we always return an array
+      return Array.isArray(result) ? result : [];
+    } catch (error) {
+      console.error('Error in getWalletsWithTraderInfo:', error);
+      return [];
+    }
+  }
 }
 
 // Export database instance
@@ -462,6 +673,9 @@ export const getDatabase = () => database;
 // Export all database functions for compatibility with frontend
 export const getTrackedWallets = (sortBy?: string, sortOrder?: 'asc' | 'desc', tagFilter?: string[]) => 
   database.getTrackedWallets(sortBy || undefined, sortOrder || 'desc', tagFilter || undefined);
+
+export const getWalletsWithTraderInfo = (sortBy?: string, sortOrder?: 'asc' | 'desc', tagFilter?: string[]) => 
+  database.getWalletsWithTraderInfo(sortBy || undefined, sortOrder || 'desc', tagFilter || undefined);
 
 export const getTrackedWalletByAddress = (address: string) => 
   database.getTrackedWallet(address);

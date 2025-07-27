@@ -1,6 +1,6 @@
-import { TrackedWallet } from '../../lib/database';
+import { WalletWithTrader } from '../../lib/database';
 
-export function walletRowPartial(wallet: TrackedWallet): string {
+export function walletRowPartial(wallet: WalletWithTrader): string {
   const socials = [];
   if (wallet.twitter_handle) {
     socials.push(`<a href="https://twitter.com/${wallet.twitter_handle.replace('@', '')}" target="_blank" title="Twitter">🐦</a>`);
@@ -24,31 +24,34 @@ export function walletRowPartial(wallet: TrackedWallet): string {
   return /*html*/ `
     <tr id="wallet-row-${wallet.address}"
         data-wallet-address="${wallet.address}"
-        data-wallet-alias="${wallet.alias}"
-        data-wallet-tags="${wallet.tags ? wallet.tags.join(',') : ''}"
+        data-trader-alias="${wallet.trader_alias}"
+        data-trader-tags="${wallet.trader_tags ? wallet.trader_tags.join(',') : ''}"
         data-wallet-active="${wallet.is_active}"
-        data-wallet-color="${wallet.ui_color || '#4338ca'}"
-        data-wallet-twitter="${wallet.twitter_handle || ''}"
-        data-wallet-telegram="${wallet.telegram_channel || ''}"
-        data-wallet-streaming="${wallet.streaming_channel || ''}"
-        data-wallet-notes="${wallet.notes || ''}"
-        data-wallet-image="${wallet.image_data || ''}">
+        data-trader-color="${wallet.trader_color || '#4338ca'}"
+        data-trader-twitter="${wallet.twitter_handle || ''}"
+        data-trader-telegram="${wallet.telegram_channel || ''}"
+        data-trader-streaming="${wallet.streaming_channel || ''}"
+        data-trader-notes="${wallet.trader_notes || ''}"
+        data-trader-image="${wallet.image_data || ''}"
+        data-trader-id="${wallet.trader_id}">
       <td>
         ${wallet.image_data 
           ? `<img src="${wallet.image_data}" alt="" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">` 
-          : `<span class="wallet-color" style="background-color: ${wallet.ui_color || '#4338ca'}"></span>`
+          : `<span class="wallet-color" style="background-color: ${wallet.trader_color || '#4338ca'}"></span>`
         }
       </td>
       <td>
-        <a href="#" onclick="editWallet('${wallet.address}'); return false;" style="text-decoration: none; color: inherit;">
-          <strong>${wallet.alias}</strong>
+        <a href="#" onclick="editTrader('${wallet.trader_id}'); return false;" 
+           style="text-decoration: none; color: inherit; ${wallet.has_conflicts ? 'display: inline-block; padding: 4px; border: 2px solid #dc3545; border-radius: 4px;' : ''}">
+          <strong>${wallet.trader_alias || wallet.trader_name}</strong>
         </a>
-        ${wallet.notes ? `<br><small style="color: var(--pico-muted-color);">${wallet.notes.substring(0, 50)}${wallet.notes.length > 50 ? '...' : ''}</small>` : ''}
+        ${wallet.trader_notes ? `<br><small style="color: var(--pico-muted-color);">${wallet.trader_notes.substring(0, 50)}${wallet.trader_notes.length > 50 ? '...' : ''}</small>` : ''}
+        ${wallet.has_conflicts ? `<br><small style="color: #dc3545;">⚠️ Ownership conflict</small>` : ''}
       </td>
       <td><code>${wallet.address.slice(0, 4)}...${wallet.address.slice(-4)}</code></td>
       <td>${socials.length > 0 ? socials.join(' ') : '-'}</td>
       <td>${formattedBalance} SOL</td>
-      <td>${wallet.tags ? wallet.tags.join(', ') : '-'}</td>
+      <td>${wallet.trader_tags ? wallet.trader_tags.join(', ') : '-'}</td>
       <td><span class="status-badge ${wallet.is_active ? 'active' : 'inactive'}">${wallet.is_active ? 'Active' : 'Inactive'}</span></td>
       <td>${age}d</td>
       <td>

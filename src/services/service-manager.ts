@@ -4,6 +4,7 @@ import { getDatabase } from '../lib/database.js';
 import { messageBus } from '../lib/message-bus.js';
 import { Service, ServiceStatus } from '../lib/service-interface.js';
 import { WalletWatcher } from './wallet-watcher.js';
+import { WalletUpdater } from './wallet-updater.js';
 import { PaperTrader } from './paper-trader.js';
 import { SignalAnalyzer } from './signal-analyzer.js';
 import { SignalTrader } from './signal-trader.js';
@@ -32,6 +33,7 @@ export class ServiceManager {
   private initializeServices() {
     // Initialize core modules with MessageBus injection
     this.services.set('wallet-watcher', new WalletWatcher(messageBus));
+    this.services.set('wallet-updater', new WalletUpdater(messageBus));
     this.services.set('paper-trader', new PaperTrader(messageBus));
     this.services.set('signal-analyzer', new SignalAnalyzer(messageBus));
     this.services.set('signal-trader', new SignalTrader(messageBus));
@@ -70,6 +72,7 @@ export class ServiceManager {
     // Start services in dependency order
     const startOrder = [
       'wallet-watcher',
+      'wallet-updater',
       'paper-trader',
       'signal-analyzer', 
       'signal-trader'
@@ -160,6 +163,7 @@ export class ServiceManager {
       'signal-trader',
       'signal-analyzer',
       'paper-trader',
+      'wallet-updater',
       'wallet-watcher'
     ];
 
@@ -304,6 +308,7 @@ export class ServiceManager {
       // Map service names from class names to database names
       const serviceNameMapping: Record<string, string> = {
         'wallet-watcher': 'WalletWatcher',
+        'wallet-updater': 'WalletUpdater',
         'paper-trader': 'PaperTrader',
         'signal-analyzer': 'SignalAnalyzer',
         'signal-trader': 'SignalTrader'

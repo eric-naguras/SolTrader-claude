@@ -80,7 +80,12 @@ export class SolscanAPI {
       }
 
       const response = await fetch(uri, { signal: AbortSignal.timeout(5000) });
-      if (!response.ok) return undefined;
+      if (!response.ok) {
+        if (response.status === 429) {
+          this.logger.debug(`[Token Metadata API] 🚫 Rate limited (429) when fetching JSON metadata from ${uri}`);
+        }
+        return undefined;
+      }
       
       const json = await response.json();
       return json.image;
@@ -107,6 +112,8 @@ export class SolscanAPI {
             icon: found.logoURI
           };
         }
+      } else if (jupiterResponse.status === 429) {
+        this.logger.debug('[Jupiter Token List API] 🚫 Rate limited (429) when fetching token list');
       }
     } catch (error) {
       this.logger.debug('Jupiter API request failed');
@@ -129,6 +136,8 @@ export class SolscanAPI {
             icon: found.logoURI
           };
         }
+      } else if (solanaResponse.status === 429) {
+        this.logger.debug('[Solana Token List API] 🚫 Rate limited (429) when fetching token list');
       }
     } catch (error) {
       this.logger.debug('Solana token list request failed');

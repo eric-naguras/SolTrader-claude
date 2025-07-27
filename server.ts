@@ -1,3 +1,6 @@
+// Initialize HTTP monitoring first to catch all HTTP requests
+import './src/lib/http-monitor.js';
+
 import { Hono, Context } from 'hono';
 import { ENV } from './src/lib/env.js';
 import { messageBus } from './src/lib/message-bus.js';
@@ -18,7 +21,8 @@ import {
   getActiveSignals, 
   getRecentTrades, 
   getStats, 
-  getTrackedWallets, 
+  getTrackedWallets,
+  getWalletsWithTraderInfo, 
   getTrackedWalletByAddress, 
   createTrackedWallet, 
   updateTrackedWallet, 
@@ -27,6 +31,25 @@ import {
 } from './src/lib/database.js';
 
 const app = new Hono();
+
+// Add request logging middleware
+app.use('*', async (c, next) => {
+  const start = Date.now();
+  const method = c.req.method;
+  const url = c.req.url;
+  const userAgent = c.req.header('User-Agent') || 'Unknown';
+  const clientIP = c.req.header('X-Forwarded-For') || c.req.header('CF-Connecting-IP') || 'Unknown';
+  
+  await next();
+  
+  const duration = Date.now() - start;
+  const status = c.res.status;
+  
+  // Log requests that might be causing issues
+  if (status === 429 || duration > 1000 || method !== 'GET') {
+    console.log(`[Server] ${method} ${url} - ${status} (${duration}ms) - IP: ${clientIP} - UA: ${userAgent.substring(0, 100)}`);
+  }
+});
 
 // Add CORS middleware for API endpoints
 app.use('*', async (c, next) => {
@@ -637,6 +660,7 @@ app.get('/htmx/service-controls', async (c: Context) => {
     // Define service metadata
     const serviceMetadata = new Map([
       ['WalletWatcher', { displayName: 'Wallet Watcher', description: 'Monitors whale wallet activity and detects coordinated trades' }],
+      ['WalletUpdater', { displayName: 'Wallet Updater', description: 'Tracks wallet relationships and identifies traders with multiple wallets' }],
       ['PaperTrader', { displayName: 'Paper Trader', description: 'Simulates trades based on signals for testing strategies' }],
       ['SignalAnalyzer', { displayName: 'Signal Analyzer', description: 'Analyzes trading patterns and generates insights' }],
       ['SignalTrader', { displayName: 'Signal Trader', description: 'Executes real trades based on signals (requires live trading enabled)' }]
@@ -678,6 +702,7 @@ app.put('/htmx/service-control/:serviceName/toggle', async (c: Context) => {
     // Map database service names to internal service names
     const serviceNameMapping: Record<string, string> = {
       'WalletWatcher': 'wallet-watcher',
+      'WalletUpdater': 'wallet-updater',
       'PaperTrader': 'paper-trader',
       'SignalAnalyzer': 'signal-analyzer',
       'SignalTrader': 'signal-trader'
@@ -700,6 +725,7 @@ app.put('/htmx/service-control/:serviceName/toggle', async (c: Context) => {
     // Define service metadata
     const serviceMetadata = new Map([
       ['WalletWatcher', { displayName: 'Wallet Watcher', description: 'Monitors whale wallet activity and detects coordinated trades' }],
+      ['WalletUpdater', { displayName: 'Wallet Updater', description: 'Tracks wallet relationships and identifies traders with multiple wallets' }],
       ['PaperTrader', { displayName: 'Paper Trader', description: 'Simulates trades based on signals for testing strategies' }],
       ['SignalAnalyzer', { displayName: 'Signal Analyzer', description: 'Analyzes trading patterns and generates insights' }],
       ['SignalTrader', { displayName: 'Signal Trader', description: 'Executes real trades based on signals (requires live trading enabled)' }]
@@ -928,21 +954,21 @@ app.get('/htmx/partials/wallets-table', async (c: Context) => {
     console.log('[Server] tags type:', typeof tags, 'tags value:', JSON.stringify(tags));
     const validSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
     
-    // Get all wallets to extract all available tags
-    console.log('Fetching all wallets...');
-    const allWallets = await getTrackedWallets();
+    // Get all wallets with trader info to extract all available tags
+    console.log('Fetching all wallets with trader info...');
+    const allWallets = await getWalletsWithTraderInfo();
     console.log('All wallets fetched:', allWallets?.length || 0);
     
     // Safety check - should not be needed now, but keeping for robustness
     if (!Array.isArray(allWallets)) {
-      console.error('getTrackedWallets() did not return an array:', typeof allWallets, allWallets);
+      console.error('getWalletsWithTraderInfo() did not return an array:', typeof allWallets, allWallets);
       return c.html(walletsTableErrorPartial());
     }
     
     const allTags = new Set<string>();
     allWallets.forEach(wallet => {
-      if (wallet.tags && Array.isArray(wallet.tags)) {
-        wallet.tags.forEach(tag => allTags.add(tag));
+      if (wallet.trader_tags && Array.isArray(wallet.trader_tags)) {
+        wallet.trader_tags.forEach(tag => allTags.add(tag));
       }
     });
     
@@ -959,9 +985,9 @@ app.get('/htmx/partials/wallets-table', async (c: Context) => {
       selectedTags = tags.split(',').filter(Boolean);
     }
     
-    // Get filtered wallets
+    // Get filtered wallets with trader info
     const wallets = selectedTags.length > 0 
-      ? await getTrackedWallets(sortBy, validSortOrder, selectedTags)
+      ? await getWalletsWithTraderInfo(sortBy, validSortOrder, selectedTags)
       : []; // No tags selected = show no wallets
     
     const tableHtml = walletsTablePartial(wallets, sortBy, validSortOrder, selectedTags, Array.from(allTags).sort());
@@ -971,6 +997,7 @@ app.get('/htmx/partials/wallets-table', async (c: Context) => {
     return c.html(walletsTableErrorPartial());
   }
 });
+
 
 // Partial fragments
 app.get('/htmx/partials/:partial', (c: Context) => {

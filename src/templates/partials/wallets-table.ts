@@ -1,4 +1,4 @@
-import { TrackedWallet } from '../../lib/database';
+import { WalletWithTrader } from '../../lib/database';
 import { walletRowPartial } from './wallet-row';
 
 const renderSortIcon = (isCurrentSort: boolean, sortOrder: 'asc' | 'desc') => {
@@ -9,7 +9,7 @@ const renderSortIcon = (isCurrentSort: boolean, sortOrder: 'asc' | 'desc') => {
     return `<span class="sort-icon inactive">▼</span>`;
 };
 
-export function walletsTablePartial(wallets: TrackedWallet[], sortBy: string = 'created_at', sortOrder: 'asc' | 'desc' = 'desc', selectedTags: string[] = [], allTags: string[] = []): string {
+export function walletsTablePartial(wallets: WalletWithTrader[], sortBy: string = 'created_at', sortOrder: 'asc' | 'desc' = 'desc', selectedTags: string[] = [], allTags: string[] = []): string {
   // Create tag filter component
   let tagFilterHtml = '';
   if (allTags.length > 0) {

@@ -22,7 +22,11 @@ export async function getWalletBalance(address: string): Promise<number | null> 
     );
 
     if (!response.ok) {
-      console.error(`[Solscan] Failed to fetch balance for ${address}: ${response.status} ${response.statusText}`);
+      if (response.status === 429) {
+        console.error(`[Solscan Balance API] 🚫 Rate limited (429) when fetching balance for ${address.substring(0,8)}... - Consider increasing balance check intervals`);
+      } else {
+        console.error(`[Solscan Balance API] ❌ Failed to fetch balance for ${address.substring(0,8)}...: ${response.status} ${response.statusText}`);
+      }
       return null;
     }
 
@@ -36,7 +40,11 @@ export async function getWalletBalance(address: string): Promise<number | null> 
     console.warn(`[Solscan] Balance not found in response for ${address}`, data);
     return null;
   } catch (error) {
-    console.error(`[Solscan] Error fetching balance for ${address}:`, error);
+    if (error.message && error.message.includes('429')) {
+      console.error(`[Solscan Balance API] 🚫 Rate limit error for ${address.substring(0,8)}... - ${error.message}`);
+    } else {
+      console.error(`[Solscan Balance API] ❌ Network error fetching balance for ${address.substring(0,8)}...:`, error.message);
+    }
     return null;
   }
 }
@@ -45,8 +53,8 @@ export async function getWalletBalance(address: string): Promise<number | null> 
 export async function getMultipleWalletBalances(addresses: string[]): Promise<Record<string, number | null>> {
   const balances: Record<string, number | null> = {};
   
-  // Process in batches to avoid rate limiting
-  const batchSize = 10;
+  // Process in smaller batches to avoid rate limiting
+  const batchSize = 5;  // Reduced from 10 to 5 to be more respectful
   for (let i = 0; i < addresses.length; i += batchSize) {
     const batch = addresses.slice(i, i + batchSize);
     const batchPromises = batch.map(address => getWalletBalance(address));
@@ -56,9 +64,9 @@ export async function getMultipleWalletBalances(addresses: string[]): Promise<Re
       balances[address] = batchResults[index];
     });
     
-    // Small delay between batches
+    // Longer delay between batches to avoid rate limiting
     if (i + batchSize < addresses.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 1000));  // Increased from 100ms to 1s
     }
   }
   
