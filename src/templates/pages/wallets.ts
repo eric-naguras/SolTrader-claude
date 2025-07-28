@@ -295,5 +295,41 @@ export const walletsPage = (params: { sortBy?: string, sortOrder?: string, tags?
     
     <!-- Toast Container for notifications -->
     <div id="toast-container"></div>
+    
+    <!-- SSE listener for real-time balance updates -->
+    <script>
+        // Listen for wallet balance updates via SSE
+        const evtSource = new EventSource('/events');
+        
+        evtSource.addEventListener('wallet_balance_updated', function(e) {
+            const data = JSON.parse(e.data);
+            const walletRow = document.getElementById(`wallet-row-${data.wallet}`);
+            
+            if (walletRow) {
+                // Update the balance display in the wallet row
+                const balanceCell = walletRow.querySelector('td:nth-child(5)');
+                if (balanceCell) {
+                    const balance = data.balance;
+                    const formattedBalance = balance >= 1 
+                        ? Math.round(balance).toString() 
+                        : balance.toFixed(1);
+                    balanceCell.textContent = `${formattedBalance} SOL`;
+                    
+                    // Add a brief animation to indicate the update
+                    balanceCell.style.transition = 'background-color 0.5s';
+                    balanceCell.style.backgroundColor = 'var(--pico-primary-background)';
+                    setTimeout(() => {
+                        balanceCell.style.backgroundColor = '';
+                    }, 1000);
+                }
+            }
+        });
+        
+        evtSource.addEventListener('wallet_balances_updated', function(e) {
+            const data = JSON.parse(e.data);
+            // For bulk updates, refresh the entire table
+            htmx.trigger('#wallets-table', 'refresh');
+        });
+    </script>
 </section>`;
 };

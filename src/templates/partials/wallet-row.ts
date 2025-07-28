@@ -54,6 +54,13 @@ export function walletRowPartial(wallet: TrackedWallet): string {
       <td>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
           <button class="outline" 
+                  hx-post="/htmx/wallets/${wallet.address}/refresh-balance"
+                  hx-target="#toast-container"
+                  style="padding: 0.25rem 0.5rem; font-size: 1.2rem; border-radius: 4px;"
+                  title="Refresh balance">
+            🔄
+          </button>
+          <button class="outline" 
                   hx-patch="/htmx/wallets/${wallet.address}/toggle"
                   hx-target="#wallet-row-${wallet.address}"
                   hx-swap="outerHTML"

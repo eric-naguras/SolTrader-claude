@@ -13,6 +13,9 @@ import { getPartial } from './src/templates/registry.js';
 import { walletsTablePartial, walletsTableErrorPartial } from './src/templates/partials/wallets-table.js';
 import { walletRowPartial } from './src/templates/partials/wallet-row.js';
 
+// Import Solscan balance service
+import { SolscanBalanceService } from './src/services/solscanBalanceService.js';
+
 // Import database functions
 import { 
   getActiveSignals, 
@@ -43,6 +46,7 @@ app.use('*', async (c, next) => {
 
 // Initialize services
 const serviceManager = new ServiceManager();
+const solscanBalanceService = new SolscanBalanceService();
 
 // SSE endpoint for real-time updates - using ReadableStream for Bun compatibility
 app.get('/events', (c: Context) => {
@@ -94,15 +98,46 @@ app.get('/events', (c: Context) => {
         }
       };
 
+      const balanceHandler = (data: any) => {
+        const msg = `id: ${eventId++}\nevent: wallet_balance_updated\ndata: ${JSON.stringify({
+          type: 'wallet_balance_updated',
+          wallet: data.wallet,
+          balance: data.balance,
+          timestamp: new Date().toISOString()
+        })}\n\n`;
+        try {
+          controller.enqueue(encoder.encode(msg));
+        } catch (error) {
+          console.log('[Server] Failed to send balance event to SSE client');
+        }
+      };
+
+      const balancesHandler = (data: any) => {
+        const msg = `id: ${eventId++}\nevent: wallet_balances_updated\ndata: ${JSON.stringify({
+          type: 'wallet_balances_updated',
+          balances: data.balances,
+          timestamp: new Date().toISOString()
+        })}\n\n`;
+        try {
+          controller.enqueue(encoder.encode(msg));
+        } catch (error) {
+          console.log('[Server] Failed to send balances event to SSE client');
+        }
+      };
+
       // Subscribe to message bus events
       messageBus.subscribe('new_trade', tradeHandler);
       messageBus.subscribe('new_signal', signalHandler);  
       messageBus.subscribe('stats_updated', statsHandler);
+      messageBus.subscribe('wallet.balance.updated', balanceHandler);
+      messageBus.subscribe('wallet.balances.updated', balancesHandler);
       
       // Store unsubscribers for cleanup
       unsubscribers.push(() => messageBus.unsubscribe('new_trade', tradeHandler));
       unsubscribers.push(() => messageBus.unsubscribe('new_signal', signalHandler));
       unsubscribers.push(() => messageBus.unsubscribe('stats_updated', statsHandler));
+      unsubscribers.push(() => messageBus.unsubscribe('wallet.balance.updated', balanceHandler));
+      unsubscribers.push(() => messageBus.unsubscribe('wallet.balances.updated', balancesHandler));
 
       // Send initial connection event
       const initialMsg = `id: ${eventId++}\nevent: connected\ndata: ${JSON.stringify({
@@ -612,6 +647,7 @@ app.put('/htmx/settings/ui', async (c: Context) => {
     );
     
     // Publish configuration change via message bus
+    messageBus.publish('config.balance_interval.changed', { interval: uiConfig.balance_interval_minutes });
     messageBus.publish('ui_config_changed', { ui_refresh_config: uiConfig });
     
     // Return empty response - form elements will maintain their state
@@ -760,6 +796,9 @@ app.post('/htmx/wallets', async (c: Context) => {
       metadata: {}
     });
     
+    // Trigger balance update for new wallet
+    messageBus.publish('wallet.balance.update_requested', { wallet: newWallet.address, type: 'new_wallet' });
+    
     // Reload wallets in wallet watcher
     const walletWatcher = await serviceManager.getService('wallet-watcher');
     if (walletWatcher && walletWatcher.loadTrackedWallets) {
@@ -900,6 +939,35 @@ app.delete('/htmx/wallets/:address', async (c: Context) => {
 });
 
 
+// HTMX endpoint for manual balance refresh
+app.post('/htmx/wallets/:address/refresh-balance', async (c: Context) => {
+  try {
+    const address = c.req.param('address');
+    
+    // Trigger balance update
+    messageBus.publish('wallet.balance.update_requested', { wallet: address, type: 'manual' });
+    
+    return c.html(`
+      <div class="toast success" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        🔄 Balance update requested for ${address.slice(0, 8)}...
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 2000);
+      </script>
+    `);
+  } catch (error) {
+    console.error('Error refreshing balance:', error);
+    return c.html(`
+      <div class="toast error" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000;">
+        ❌ Failed to refresh balance
+      </div>
+      <script>
+        setTimeout(() => document.querySelector('.toast').remove(), 3000);
+      </script>
+    `, 500);
+  }
+});
+
 // HTMX endpoint for toggling wallet status - returns only the updated row
 app.patch('/htmx/wallets/:address/toggle', async (c: Context) => {
   try {
@@ -999,6 +1067,10 @@ async function initialize() {
   // Start backend services
   console.log('🚀 Starting Sonar Platform...');
   await serviceManager.start();
+  
+  // Start Solscan balance service
+  console.log('🔍 Starting Solscan balance service...');
+  await solscanBalanceService.start();
 }
 
 // Start initialization
