@@ -45,6 +45,9 @@ coverage/
 tmp/
 temp/
 
+# Git worktrees
+trees/
+
 # Compiled JavaScript (we use TypeScript)
 backend/**/*.js
 backend/**/*.js.map
